@@ -71,3 +71,53 @@ fn main() {
 ```
 
 As you can see all the operators are already implemented automatically for you.
+
+## 📊 Benchmarks
+
+Benchmark results are hosted [here](https://lambdaclass.github.io/lambdaworks/bench).
+
+These are the results of execution of the benchmarks for finite field arithmetic using the STARK field prime (p = 3618502788666131213697322783095070105623107215331596699973092056135872020481). 
+
+Differences of 3% are common for some measurements, so small differences are not statistically relevant.
+
+ARM - M1
+
+| Operation| N    | Arkworks  | lambdaworks |
+| -------- | --- | --------- | ----------- |
+| `mul`    |   10k  | 112 μs | 115 μs   |
+| `add`    |   1M  | 8.5 ms  | 7.0 ms    |
+| `sub`    |   1M  | 7.53 ms   | 7.12 ms     |
+| `pow`    |   10k  | 11.2 ms   | 12.4 ms    |
+| `invert` |  10k   | 30.0 ms  | 27.2 ms   |
+
+x86 - AMD Ryzen 7 PRO 
+
+| Operation | N    | Arkworks (ASM)*  | lambdaworks |
+| -------- | --- | --------- | ----------- |
+| `mul`    |   10k  | 118.9 us | 95.7 us   |
+| `add`    |   1M  | 6.8 ms  | 5.4 ms    |
+| `sub`    |   1M  |  6.6 ms  |  5.2 ms   |
+| `pow`    |   10k  |  10.6 ms   | 9.4 ms    |
+| `invert` |  10k   | 34.2 ms  | 35.74 ms |
+
+*assembly feature was enabled manually for that bench, and is not activated by default when running criterion
+
+To run them locally, you will need `cargo-criterion` and `cargo-flamegraph`. Install it with:
+
+```bash
+cargo install cargo-criterion
+```
+
+Run the complete benchmark suite with:
+
+```bash
+make benchmarks
+```
+
+Run a specific benchmark suite with `cargo`, for example to run the one for `field`:
+
+```bash
+make benchmark BENCH=field
+```
+
+You can check the generated HTML report in `target/criterion/reports/index.html`
