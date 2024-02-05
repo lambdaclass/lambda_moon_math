@@ -162,7 +162,7 @@ where
 pub fn fibonacci_trace<F: IsFFTField>(
     initial_values: [FieldElement<F>; 2],
     trace_length: usize,
-) -> TraceTable<F> {
+) -> TraceTable<F, F> {
     let mut ret: Vec<FieldElement<F>> = vec![];
 
     ret.push(initial_values[0].clone());
@@ -172,5 +172,5 @@ pub fn fibonacci_trace<F: IsFFTField>(
         ret.push(ret[i - 1].clone() + ret[i - 2].clone());
     }
 
-    TraceTable::from_columns(vec![ret], 1, 1)
+    TraceTable::from_columns_main(vec![ret], 1)
 }

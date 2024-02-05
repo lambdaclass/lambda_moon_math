@@ -4,12 +4,11 @@ use criterion::{
 use lambdaworks_math::{
     field::fields::fft_friendly::stark_252_prime_field::Stark252PrimeField, traits::Deserializable,
 };
-use platinum_prover::air::{verify_cairo_proof, PublicInputs};
+use platinum_prover::layouts::plain::air::{verify_cairo_proof, PublicInputs};
 use stark_platinum_prover::proof::{
     options::{ProofOptions, SecurityLevel},
     stark::StarkProof,
 };
-
 pub mod functions;
 
 fn load_proof_and_pub_inputs(

@@ -35,10 +35,11 @@ pub trait AIR {
 
     fn build_auxiliary_trace(
         &self,
-        _main_trace: &TraceTable<Self::Field>,
+        _main_trace: &mut TraceTable<Self::Field, Self::FieldExtension>,
         _rap_challenges: &[FieldElement<Self::FieldExtension>],
-    ) -> TraceTable<Self::FieldExtension> {
-        TraceTable::empty()
+    ) where
+        Self::FieldExtension: IsFFTField,
+    {
     }
 
     fn build_rap_challenges(
@@ -49,6 +50,11 @@ pub trait AIR {
     }
 
     fn trace_layout(&self) -> (usize, usize);
+
+    fn has_trace_interaction(&self) -> bool {
+        let (_main_trace_columns, aux_trace_columns) = self.trace_layout();
+        aux_trace_columns != 0
+    }
 
     fn num_auxiliary_rap_columns(&self) -> usize {
         self.trace_layout().1
@@ -146,8 +152,6 @@ pub trait AIR {
         &self,
     ) -> &Vec<Box<dyn TransitionConstraint<Self::Field, Self::FieldExtension>>>;
 
-    /// Computes the unique zerofier evaluations for all transitions constraints.
-    /// Returns a vector of vectors, where each inner vector contains the unique zerofier evaluations for a given constraint
     fn transition_zerofier_evaluations(
         &self,
         domain: &Domain<Self::Field>,

@@ -6,7 +6,7 @@ use crate::trace::LDETraceTable;
 use crate::traits::AIR;
 use crate::{frame::Frame, prover::evaluate_polynomial_on_lde_domain};
 use itertools::Itertools;
-#[cfg(all(debug_assertions, not(feature = "parallel")))]
+#[cfg(not(feature = "parallel"))]
 use lambdaworks_math::polynomial::Polynomial;
 use lambdaworks_math::{fft::errors::FFTError, field::element::FieldElement, traits::AsBytes};
 #[cfg(feature = "parallel")]
@@ -14,6 +14,7 @@ use rayon::{
     iter::IndexedParallelIterator,
     prelude::{IntoParallelIterator, ParallelIterator},
 };
+
 #[cfg(feature = "instruments")]
 use std::time::Instant;
 
@@ -45,6 +46,7 @@ impl<A: AIR> ConstraintEvaluator<A> {
     {
         let boundary_constraints = &self.boundary_constraints;
         let number_of_b_constraints = boundary_constraints.constraints.len();
+
         let boundary_zerofiers_inverse_evaluations: Vec<Vec<FieldElement<A::Field>>> =
             boundary_constraints
                 .constraints

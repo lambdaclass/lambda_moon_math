@@ -23,6 +23,7 @@ impl<F: IsFFTField> PeriodicConstraint<F> {
         }
     }
 }
+
 impl<F: IsFFTField> Default for PeriodicConstraint<F> {
     fn default() -> Self {
         Self::new()
@@ -187,7 +188,7 @@ where
     }
 }
 
-pub fn simple_periodic_trace<F: IsFFTField>(trace_length: usize) -> TraceTable<F> {
+pub fn simple_periodic_trace<F: IsFFTField>(trace_length: usize) -> TraceTable<F, F> {
     let mut ret: Vec<FieldElement<F>> = vec![];
 
     ret.push(FieldElement::one());

@@ -73,12 +73,12 @@ impl<'t, F: IsField> Table<F> {
         &self.data[row_offset..row_offset + self.width]
     }
 
-    /// Given a row index, returns a mutable reference to that row as a slice of field elements.
-    pub fn get_row_mut(&mut self, row_idx: usize) -> &mut [FieldElement<F>] {
-        let n_cols = self.width;
-        let row_offset = row_idx * n_cols;
-        &mut self.data[row_offset..row_offset + n_cols]
-    }
+    // /// Given a row index, returns a mutable reference to that row as a slice of field elements.
+    // pub fn get_row_mut(&mut self, row_idx: usize) -> &mut [FieldElement<F>] {
+    //     let n_cols = self.width;
+    //     let row_offset = row_idx * n_cols;
+    //     &mut self.data[row_offset..row_offset + n_cols]
+    // }
 
     /// Given a slice of field elements representing a row, appends it to
     /// the end of the table.
@@ -105,10 +105,21 @@ impl<'t, F: IsField> Table<F> {
             .collect()
     }
 
+    pub fn get_column(&self, col_idx: usize) -> Vec<FieldElement<F>> {
+        (0..self.height)
+            .map(|row_idx| self.data[row_idx * self.width + col_idx].clone())
+            .collect()
+    }
+
     /// Given row and column indexes, returns the stored field element in that position of the table.
     pub fn get(&self, row: usize, col: usize) -> &FieldElement<F> {
         let idx = row * self.width + col;
         &self.data[idx]
+    }
+
+    pub fn set(&mut self, row: usize, col: usize, value: FieldElement<F>) {
+        let idx = row * self.width + col;
+        self.data[idx] = value;
     }
 
     /// Given a step size, converts the given table into a `Frame`.

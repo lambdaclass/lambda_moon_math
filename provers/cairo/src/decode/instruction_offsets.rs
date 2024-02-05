@@ -34,12 +34,12 @@ impl InstructionOffsets {
         i32::from(i16::from_le_bytes(aux))
     }
 
-    pub fn to_trace_representation<F: IsField>(&self) -> [FieldElement<F>; 3] {
-        [
+    pub fn to_trace_representation(&self) -> (Felt252, Felt252, Felt252) {
+        (
             to_unbiased_representation(self.off_dst),
             to_unbiased_representation(self.off_op0),
             to_unbiased_representation(self.off_op1),
-        ]
+        )
     }
 }
 

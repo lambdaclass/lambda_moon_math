@@ -143,20 +143,21 @@ pub trait IsStarkVerifier<A: AIR> {
         // ==========|   Round 4   |==========
         // ===================================
 
-        let n_terms_composition_poly = proof.composition_poly_parts_ood_evaluation.len();
-        let n_terms_trace = air.context().transition_offsets.len() * air.context().trace_columns;
+        let num_terms_composition_poly = proof.composition_poly_parts_ood_evaluation.len();
+        let num_terms_trace =
+            air.context().transition_offsets.len() * A::STEP_SIZE * air.context().trace_columns;
         let gamma = transcript.sample_field_element();
 
         // <<<< Receive challenges: 𝛾, 𝛾'
         let mut deep_composition_coefficients: Vec<_> =
             core::iter::successors(Some(FieldElement::one()), |x| Some(x * &gamma))
-                .take(n_terms_composition_poly + n_terms_trace)
+                .take(num_terms_composition_poly + num_terms_trace)
                 .collect();
 
         let trace_term_coeffs: Vec<_> = deep_composition_coefficients
-            .drain(..n_terms_trace)
+            .drain(..num_terms_trace)
             .collect::<Vec<_>>()
-            .chunks(air.context().transition_offsets.len())
+            .chunks(air.context().transition_offsets.len() * A::STEP_SIZE)
             .map(|chunk| chunk.to_vec())
             .collect();
 
@@ -668,15 +669,23 @@ pub trait IsStarkVerifier<A: AIR> {
         lde_trace_evaluations: &[FieldElement<A::FieldExtension>],
         lde_composition_poly_parts_evaluation: &[FieldElement<A::FieldExtension>],
     ) -> FieldElement<A::FieldExtension> {
-        let mut denoms_trace = (0..proof.trace_ood_evaluations.height)
+        let ood_evaluations_table_height = proof.trace_ood_evaluations.height;
+        let ood_evaluations_table_width = proof.trace_ood_evaluations.width;
+        let trace_term_coeffs = &challenges.trace_term_coeffs;
+        debug_assert_eq!(
+            ood_evaluations_table_height * ood_evaluations_table_width,
+            trace_term_coeffs.len() * trace_term_coeffs[0].len()
+        );
+
+        let mut denoms_trace = (0..ood_evaluations_table_height)
             .map(|row_idx| evaluation_point - primitive_root.pow(row_idx as u64) * &challenges.z)
             .collect::<Vec<FieldElement<A::FieldExtension>>>();
         FieldElement::inplace_batch_inverse(&mut denoms_trace).unwrap();
 
-        let trace_term = (0..proof.trace_ood_evaluations.width)
+        let trace_term = (0..ood_evaluations_table_width)
             .zip(&challenges.trace_term_coeffs)
             .fold(FieldElement::zero(), |trace_terms, (col_idx, coeff_row)| {
-                let trace_i = (0..proof.trace_ood_evaluations.height).zip(coeff_row).fold(
+                let trace_i = (0..ood_evaluations_table_height).zip(coeff_row).fold(
                     FieldElement::zero(),
                     |trace_t, (row_idx, coeff)| {
                         let poly_evaluation = (lde_trace_evaluations[col_idx].clone()

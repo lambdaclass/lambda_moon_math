@@ -170,15 +170,31 @@ where
 /// https://github.com/starkware-libs/stone-prover
 pub trait IsStarkProver<A: AIR> {
     /// Returns the Merkle tree and the commitment to the vectors `vectors`.
-    fn batch_commit<E>(vectors: &[Vec<FieldElement<E>>]) -> (BatchedMerkleTree<E>, Commitment)
+    fn batch_commit_main(
+        vectors: &[Vec<FieldElement<A::Field>>],
+    ) -> (BatchedMerkleTree<A::Field>, Commitment)
+    where
+        FieldElement<A::Field>: AsBytes + Sync + Send,
+        // FieldElement<A::FieldExtension>: AsBytes + Sync + Send,
+        // E: IsSubFieldOf<A::FieldExtension>,
+        // A::Field: IsSubFieldOf<E>,
+    {
+        let tree = BatchedMerkleTree::build(vectors);
+        let commitment = tree.root;
+        (tree, commitment)
+    }
+
+    /// Returns the Merkle tree and the commitment to the vectors `vectors`.
+    fn batch_commit_extension(
+        vectors: &[Vec<FieldElement<A::FieldExtension>>],
+    ) -> (BatchedMerkleTree<A::FieldExtension>, Commitment)
     where
         FieldElement<A::Field>: AsBytes + Sync + Send,
         FieldElement<A::FieldExtension>: AsBytes + Sync + Send,
-        FieldElement<E>: AsBytes + Sync + Send,
-        E: IsSubFieldOf<A::FieldExtension>,
-        A::Field: IsSubFieldOf<E>,
+        // E: IsSubFieldOf<A::FieldExtension>,
+        // A::Field: IsSubFieldOf<E>,
     {
-        let tree = BatchedMerkleTree::<E>::build(vectors);
+        let tree = BatchedMerkleTree::build(vectors);
         let commitment = tree.root;
         (tree, commitment)
     }
@@ -191,25 +207,77 @@ pub trait IsStarkProver<A: AIR> {
     /// • The Merkle tree of evaluations of the above polynomials over the domain `domain`.
     /// • The roots of the above Merkle trees.
     #[allow(clippy::type_complexity)]
-    fn interpolate_and_commit<E>(
-        trace: &TraceTable<E>,
+    fn interpolate_and_commit_main(
+        trace: &TraceTable<A::Field, A::FieldExtension>,
         domain: &Domain<A::Field>,
         transcript: &mut impl IsStarkTranscript<A::FieldExtension>,
     ) -> (
-        Vec<Polynomial<FieldElement<E>>>,
-        Vec<Vec<FieldElement<E>>>,
-        BatchedMerkleTree<E>,
+        Vec<Polynomial<FieldElement<A::Field>>>,
+        Vec<Vec<FieldElement<A::Field>>>,
+        BatchedMerkleTree<A::Field>,
         Commitment,
     )
     where
         FieldElement<A::Field>: AsBytes + Send + Sync,
-        FieldElement<E>: AsBytes + Send + Sync,
+        // FieldElement<E>: AsBytes + Send + Sync,
         FieldElement<A::FieldExtension>: AsBytes + Send + Sync,
-        E: IsSubFieldOf<A::FieldExtension>,
-        A::Field: IsSubFieldOf<E>,
+        A::Field: IsSubFieldOf<A::FieldExtension>,
     {
         // Interpolate columns of `trace`.
-        let trace_polys = trace.compute_trace_polys::<A::Field>();
+        let trace_polys = trace.compute_trace_polys_main::<A::Field>();
+
+        // Evaluate those polynomials t_j on the large domain D_LDE.
+        let lde_trace_evaluations =
+            Self::compute_lde_trace_evaluations::<A::Field>(&trace_polys, domain);
+
+        let mut lde_trace_permuted = lde_trace_evaluations.clone();
+        for col in lde_trace_permuted.iter_mut() {
+            in_place_bit_reverse_permute(col);
+        }
+
+        // Compute commitment.
+        let lde_trace_permuted_rows = columns2rows(lde_trace_permuted);
+        let (lde_trace_merkle_tree, lde_trace_merkle_root) =
+            Self::batch_commit_main(&lde_trace_permuted_rows);
+
+        // >>>> Send commitment.
+        transcript.append_bytes(&lde_trace_merkle_root);
+
+        (
+            trace_polys,
+            lde_trace_evaluations,
+            lde_trace_merkle_tree,
+            lde_trace_merkle_root,
+        )
+    }
+
+    /// Given a `TraceTable`, this method interpolates its columns, computes the commitment to the
+    /// table and appends it to the transcript.
+    /// Output: a touple of length 4 with the following:
+    /// • The polynomials interpolating the columns of `trace`.
+    /// • The evaluations of the above polynomials over the domain `domain`.
+    /// • The Merkle tree of evaluations of the above polynomials over the domain `domain`.
+    /// • The roots of the above Merkle trees.
+    #[allow(clippy::type_complexity)]
+    fn interpolate_and_commit_aux(
+        trace: &TraceTable<A::Field, A::FieldExtension>,
+        domain: &Domain<A::Field>,
+        transcript: &mut impl IsStarkTranscript<A::FieldExtension>,
+    ) -> (
+        Vec<Polynomial<FieldElement<A::FieldExtension>>>,
+        Vec<Vec<FieldElement<A::FieldExtension>>>,
+        BatchedMerkleTree<A::FieldExtension>,
+        Commitment,
+    )
+    where
+        FieldElement<A::Field>: AsBytes + Send + Sync,
+        // FieldElement<E>: AsBytes + Send + Sync,
+        FieldElement<A::FieldExtension>: AsBytes + Send + Sync,
+        // E: IsSubFieldOf<A::FieldExtension> + IsFFTField,
+        A::Field: IsSubFieldOf<A::FieldExtension> + IsFFTField,
+    {
+        // Interpolate columns of `trace`.
+        let trace_polys = trace.compute_trace_polys_aux::<A::Field>();
 
         // Evaluate those polynomials t_j on the large domain D_LDE.
         let lde_trace_evaluations = Self::compute_lde_trace_evaluations(&trace_polys, domain);
@@ -222,7 +290,7 @@ pub trait IsStarkProver<A: AIR> {
         // Compute commitment.
         let lde_trace_permuted_rows = columns2rows(lde_trace_permuted);
         let (lde_trace_merkle_tree, lde_trace_merkle_root) =
-            Self::batch_commit(&lde_trace_permuted_rows);
+            Self::batch_commit_extension(&lde_trace_permuted_rows);
 
         // >>>> Send commitment.
         transcript.append_bytes(&lde_trace_merkle_root);
@@ -242,10 +310,11 @@ pub trait IsStarkProver<A: AIR> {
         domain: &Domain<A::Field>,
     ) -> Vec<Vec<FieldElement<E>>>
     where
-        FieldElement<A::Field>: Send + Sync,
         FieldElement<E>: Send + Sync,
+        FieldElement<A::Field>: Send + Sync,
         E: IsSubFieldOf<A::FieldExtension>,
         A::Field: IsSubFieldOf<E>,
+        // F: IsFFTField,
     {
         #[cfg(not(feature = "parallel"))]
         let trace_polys_iter = trace_polys.iter();
@@ -268,16 +337,18 @@ pub trait IsStarkProver<A: AIR> {
     /// Returns the result of the first round of the STARK Prove protocol.
     fn round_1_randomized_air_with_preprocessing(
         air: &A,
-        main_trace: &TraceTable<A::Field>,
+        trace: &mut TraceTable<A::Field, A::FieldExtension>,
         domain: &Domain<A::Field>,
         transcript: &mut impl IsStarkTranscript<A::FieldExtension>,
     ) -> Result<Round1<A>, ProvingError>
     where
         FieldElement<A::Field>: AsBytes + Send + Sync,
+        A::FieldExtension: IsFFTField,
         FieldElement<A::FieldExtension>: AsBytes + Send + Sync,
     {
         let (trace_polys, evaluations, main_merkle_tree, main_merkle_root) =
-            Self::interpolate_and_commit::<A::Field>(main_trace, domain, transcript);
+            // Self::interpolate_and_commit_main::<A::Field>(trace, domain, transcript);
+            Self::interpolate_and_commit_main(trace, domain, transcript);
 
         let main = Round1CommitmentData::<A::Field> {
             trace_polys,
@@ -286,11 +357,10 @@ pub trait IsStarkProver<A: AIR> {
         };
 
         let rap_challenges = air.build_rap_challenges(transcript);
-
-        let aux_trace = air.build_auxiliary_trace(main_trace, &rap_challenges);
-        let (aux, aux_evaluations) = if !aux_trace.is_empty() {
+        let (aux, aux_evaluations) = if air.has_trace_interaction() {
+            air.build_auxiliary_trace(trace, &rap_challenges);
             let (aux_trace_polys, aux_trace_polys_evaluations, aux_merkle_tree, aux_merkle_root) =
-                Self::interpolate_and_commit(&aux_trace, domain, transcript);
+                Self::interpolate_and_commit_aux(trace, domain, transcript);
             let aux_evaluations = aux_trace_polys_evaluations;
             let aux = Some(Round1CommitmentData::<A::FieldExtension> {
                 trace_polys: aux_trace_polys,
@@ -345,7 +415,7 @@ pub trait IsStarkProver<A: AIR> {
             lde_composition_poly_evaluations_merged.push(chunk0);
         }
 
-        Self::batch_commit(&lde_composition_poly_evaluations_merged)
+        Self::batch_commit_extension(&lde_composition_poly_evaluations_merged)
     }
 
     /// Returns the result of the second round of the STARK Prove protocol.
@@ -471,17 +541,26 @@ pub trait IsStarkProver<A: AIR> {
         let coset_offset = FieldElement::<A::Field>::from(coset_offset_u64);
 
         let gamma = transcript.sample_field_element();
+
         let n_terms_composition_poly = round_2_result.lde_composition_poly_evaluations.len();
-        let n_terms_trace = air.context().transition_offsets.len() * air.context().trace_columns;
+        let num_terms_trace =
+            air.context().transition_offsets.len() * A::STEP_SIZE * air.context().trace_columns;
 
         // <<<< Receive challenges: 𝛾, 𝛾'
         let mut deep_composition_coefficients: Vec<_> =
             core::iter::successors(Some(FieldElement::one()), |x| Some(x * &gamma))
-                .take(n_terms_composition_poly + n_terms_trace)
+                .take(n_terms_composition_poly + num_terms_trace)
                 .collect();
 
-        let trace_poly_coeffients: Vec<_> = deep_composition_coefficients
-            .drain(..n_terms_trace)
+        // let trace_poly_coeffients: Vec<_> = deep_composition_coefficients
+        //     .drain(..num_terms_trace)
+        //     .collect();
+
+        let trace_term_coeffs: Vec<_> = deep_composition_coefficients
+            .drain(..num_terms_trace)
+            .collect::<Vec<_>>()
+            .chunks(air.context().transition_offsets.len() * A::STEP_SIZE)
+            .map(|chunk| chunk.to_vec())
             .collect();
 
         // <<<< Receive challenges: 𝛾ⱼ, 𝛾ⱼ'
@@ -489,14 +568,13 @@ pub trait IsStarkProver<A: AIR> {
 
         // Compute p₀ (deep composition polynomial)
         let deep_composition_poly = Self::compute_deep_composition_poly(
-            air,
             &round_1_result.all_trace_polys(),
             round_2_result,
             round_3_result,
             z,
             &domain.trace_primitive_root,
             &gammas,
-            &trace_poly_coeffients,
+            &trace_term_coeffs,
         );
 
         let domain_size = domain.lde_roots_of_unity_coset.len();
@@ -522,6 +600,7 @@ pub trait IsStarkProver<A: AIR> {
 
         let number_of_queries = air.options().fri_number_of_queries;
         let iotas = Self::sample_query_indexes(number_of_queries, domain, transcript);
+
         let query_list = fri::query_phase(&fri_layers, &iotas);
 
         let fri_layers_merkle_roots: Vec<_> = fri_layers
@@ -557,14 +636,13 @@ pub trait IsStarkProver<A: AIR> {
     /// composition polynomial, with coefficients sampled by the verifier (i.e. using Fiat-Shamir).
     #[allow(clippy::too_many_arguments)]
     fn compute_deep_composition_poly(
-        air: &A,
         trace_polys: &[Polynomial<FieldElement<A::FieldExtension>>],
         round_2_result: &Round2<A::FieldExtension>,
         round_3_result: &Round3<A::FieldExtension>,
         z: &FieldElement<A::FieldExtension>,
         primitive_root: &FieldElement<A::Field>,
         composition_poly_gammas: &[FieldElement<A::FieldExtension>],
-        trace_terms_gammas: &[FieldElement<A::FieldExtension>],
+        trace_terms_gammas: &[Vec<FieldElement<A::FieldExtension>>],
     ) -> Polynomial<FieldElement<A::FieldExtension>>
     where
         FieldElement<A::Field>: AsBytes + Send + Sync,
@@ -585,28 +663,26 @@ pub trait IsStarkProver<A: AIR> {
         h_terms.ruffini_division_inplace(&z_power);
 
         // Get trace evaluations needed for the trace terms of the deep composition polynomial
-        let transition_offsets = &air.context().transition_offsets;
         let trace_frame_evaluations = &round_3_result.trace_ood_evaluations;
 
         // Compute the sum of all the trace terms of the deep composition polynomial.
         // There is one term for every trace polynomial and for every row in the frame.
         // ∑ ⱼₖ [ 𝛾ₖ ( tⱼ − tⱼ(z) ) / ( X − zgᵏ )]
 
-        // @@@ this could be const
-        let trace_frame_length = trace_frame_evaluations.height;
+        let trace_evaluations_columns = &trace_frame_evaluations.columns();
 
         #[cfg(feature = "parallel")]
         let trace_terms = trace_polys
             .par_iter()
             .enumerate()
             .fold(Polynomial::zero, |trace_terms, (i, t_j)| {
+                let gammas_i = &trace_terms_gammas[i];
+                let trace_evaluations_i = &trace_evaluations_columns[i];
                 Self::compute_trace_term(
                     &trace_terms,
-                    (i, t_j),
-                    trace_frame_length,
-                    trace_terms_gammas,
-                    &trace_frame_evaluations.columns(),
-                    transition_offsets,
+                    t_j,
+                    gammas_i,
+                    trace_evaluations_i,
                     (z, primitive_root),
                 )
             })
@@ -618,13 +694,13 @@ pub trait IsStarkProver<A: AIR> {
                 .iter()
                 .enumerate()
                 .fold(Polynomial::zero(), |trace_terms, (i, t_j)| {
+                    let gammas_i = &trace_terms_gammas[i];
+                    let trace_evaluations_i = &trace_evaluations_columns[i];
                     Self::compute_trace_term(
                         &trace_terms,
-                        (i, t_j),
-                        trace_frame_length,
-                        trace_terms_gammas,
-                        &trace_frame_evaluations.columns(),
-                        transition_offsets,
+                        t_j,
+                        gammas_i,
+                        trace_evaluations_i,
                         (z, primitive_root),
                     )
                 });
@@ -632,33 +708,31 @@ pub trait IsStarkProver<A: AIR> {
         h_terms + trace_terms
     }
 
+    // FIXME: FIX THIS DOCS!
     /// Adds to `accumulator` the term corresponding to the trace polynomial `t_j` of the Deep
     /// composition polynomial. That is, returns `accumulator + \sum_i \gamma_i \frac{ t_j - t_j(zg^i) }{ X - zg^i }`,
     /// where `i` ranges from `T * j` to `T * j + T - 1`, where `T` is the number of offsets in every frame.
     fn compute_trace_term(
         accumulator: &Polynomial<FieldElement<A::FieldExtension>>,
-        (j, t_j): (usize, &Polynomial<FieldElement<A::FieldExtension>>),
-        trace_frame_length: usize,
+        trace_term_poly: &Polynomial<FieldElement<A::FieldExtension>>,
         trace_terms_gammas: &[FieldElement<A::FieldExtension>],
-        trace_frame_evaluations: &[Vec<FieldElement<A::FieldExtension>>],
-        transition_offsets: &[usize],
+        trace_frame_evaluations: &[FieldElement<A::FieldExtension>],
         (z, primitive_root): (&FieldElement<A::FieldExtension>, &FieldElement<A::Field>),
     ) -> Polynomial<FieldElement<A::FieldExtension>>
     where
         FieldElement<A::Field>: AsBytes + Send + Sync,
         FieldElement<A::FieldExtension>: AsBytes + Send + Sync,
     {
-        let iter_trace_gammas = trace_terms_gammas.iter().skip(j * trace_frame_length);
-        let trace_int = trace_frame_evaluations[j]
+        let trace_int = trace_frame_evaluations
             .iter()
-            .zip(transition_offsets)
-            .zip(iter_trace_gammas)
+            .enumerate()
+            .zip(trace_terms_gammas)
             .fold(
                 Polynomial::zero(),
-                |trace_agg, ((t_j_z, offset), trace_gamma)| {
+                |trace_agg, ((offset, trace_term_poly_evaluation), trace_gamma)| {
                     // @@@ this can be pre-computed
-                    let z_shifted = primitive_root.pow(*offset) * z;
-                    let mut poly = t_j - t_j_z;
+                    let z_shifted = primitive_root.pow(offset) * z;
+                    let mut poly = trace_term_poly - trace_term_poly_evaluation;
                     poly.ruffini_division_inplace(&z_shifted);
                     trace_agg + poly * trace_gamma
                 },
@@ -790,7 +864,7 @@ pub trait IsStarkProver<A: AIR> {
     /// Generates a STARK proof for the trace `main_trace` with public inputs `pub_inputs`.
     /// Warning: the transcript must be safely initializated before passing it to this method.
     fn prove(
-        main_trace: &TraceTable<A::Field>,
+        trace: &mut TraceTable<A::Field, A::FieldExtension>,
         pub_inputs: &A::PublicInputs,
         proof_options: &ProofOptions,
         mut transcript: impl IsStarkTranscript<A::FieldExtension>,
@@ -798,6 +872,7 @@ pub trait IsStarkProver<A: AIR> {
     where
         A: Send + Sync,
         FieldElement<A::Field>: AsBytes + Send + Sync,
+        A::FieldExtension: IsFFTField,
         FieldElement<A::FieldExtension>: AsBytes + Send + Sync,
     {
         info!("Started proof generation...");
@@ -806,7 +881,7 @@ pub trait IsStarkProver<A: AIR> {
         #[cfg(feature = "instruments")]
         let timer0 = Instant::now();
 
-        let air = A::new(main_trace.n_rows(), pub_inputs, proof_options);
+        let air = A::new(trace.num_rows(), pub_inputs, proof_options);
         let domain = Domain::new(&air);
 
         #[cfg(feature = "instruments")]
@@ -823,12 +898,8 @@ pub trait IsStarkProver<A: AIR> {
         #[cfg(feature = "instruments")]
         let timer1 = Instant::now();
 
-        let round_1_result = Self::round_1_randomized_air_with_preprocessing(
-            &air,
-            main_trace,
-            &domain,
-            &mut transcript,
-        )?;
+        let round_1_result =
+            Self::round_1_randomized_air_with_preprocessing(&air, trace, &domain, &mut transcript)?;
 
         #[cfg(debug_assertions)]
         validate_trace(
@@ -1041,7 +1112,7 @@ mod tests {
             a1: Felt252::one(),
         };
         let trace = simple_fibonacci::fibonacci_trace([Felt252::from(1), Felt252::from(1)], 8);
-        let trace_length = trace.n_rows();
+        let trace_length = trace.num_rows();
         let coset_offset = 3;
         let blowup_factor: usize = 2;
         let grinding_factor = 20;
@@ -1083,8 +1154,10 @@ mod tests {
     #[test]
     fn test_evaluate_polynomial_on_lde_domain_on_trace_polys() {
         let trace = simple_fibonacci::fibonacci_trace([Felt252::from(1), Felt252::from(1)], 8);
-        let trace_length = trace.n_rows();
-        let trace_polys = trace.compute_trace_polys::<Stark252PrimeField>();
+
+        let trace_length = trace.num_rows();
+
+        let trace_polys = trace.compute_trace_polys_main::<Stark252PrimeField>();
         let coset_offset = Felt252::from(3);
         let blowup_factor: usize = 2;
         let domain_size = 8;
@@ -1133,10 +1206,11 @@ mod tests {
         ProofOptions,
         [u8; 4],
     ) {
-        let trace = fibonacci_2_cols_shifted::compute_trace(FieldElement::one(), 4);
+        let mut trace = fibonacci_2_cols_shifted::compute_trace(FieldElement::one(), 4);
 
         let claimed_index = 3;
-        let claimed_value = trace.get_row(claimed_index)[0];
+        let col = 0;
+        let claimed_value = *trace.get_main(claimed_index, col);
         let mut proof_options = ProofOptions::default_test_options();
         proof_options.blowup_factor = 4;
         proof_options.coset_offset = 3;
@@ -1151,7 +1225,7 @@ mod tests {
         let transcript_init_seed = [0xca, 0xfe, 0xca, 0xfe];
 
         let proof = Prover::<Fibonacci2ColsShifted<_>>::prove(
-            &trace,
+            &mut trace,
             &pub_inputs,
             &proof_options,
             StoneProverTranscript::new(&transcript_init_seed),
@@ -1529,10 +1603,11 @@ mod tests {
         ProofOptions,
         [u8; 4],
     ) {
-        let trace = fibonacci_2_cols_shifted::compute_trace(FieldElement::from(12345), 512);
+        let mut trace = fibonacci_2_cols_shifted::compute_trace(FieldElement::from(12345), 512);
 
         let claimed_index = 420;
-        let claimed_value = trace.get_row(claimed_index)[0];
+        let col = 0;
+        let claimed_value = *trace.get_main(claimed_index, col);
         let mut proof_options = ProofOptions::default_test_options();
         proof_options.blowup_factor = 1 << 6;
         proof_options.coset_offset = 3;
@@ -1547,7 +1622,7 @@ mod tests {
         let transcript_init_seed = [0xfa, 0xfa, 0xfa, 0xee];
 
         let proof = Prover::<Fibonacci2ColsShifted<_>>::prove(
-            &trace,
+            &mut trace,
             &pub_inputs,
             &proof_options,
             StoneProverTranscript::new(&transcript_init_seed),

@@ -1,7 +1,10 @@
-use super::{cairo_mem::CairoMemory, register_states::RegisterStates};
-use crate::transition_constraints::*;
+use crate::{
+    cairo_mem::CairoMemory,
+    execution_trace::{set_mem_permutation_column, set_rc_permutation_column, CairoTraceTable},
+    register_states::RegisterStates,
+    transition_constraints::*,
+};
 use cairo_vm::{air_public_input::MemorySegmentAddresses, without_std::collections::HashMap};
-#[cfg(debug_assertions)]
 use itertools::Itertools;
 use lambdaworks_math::{
     errors::DeserializationError,
@@ -10,6 +13,7 @@ use lambdaworks_math::{
     },
     traits::{AsBytes, ByteConversion, Deserializable},
 };
+use stark_platinum_prover::constraints::transition::TransitionConstraint;
 use stark_platinum_prover::{
     constraints::boundary::{BoundaryConstraint, BoundaryConstraints},
     context::AirContext,
@@ -22,63 +26,6 @@ use stark_platinum_prover::{
     verifier::{IsStarkVerifier, Verifier},
     Felt252,
 };
-use stark_platinum_prover::{constraints::transition::TransitionConstraint, table::Table};
-
-// TODO: These should probably be in the TraceTable module.
-pub const FRAME_RES: usize = 16;
-pub const FRAME_AP: usize = 17;
-pub const FRAME_FP: usize = 18;
-pub const FRAME_PC: usize = 19;
-pub const FRAME_DST_ADDR: usize = 20;
-pub const FRAME_OP0_ADDR: usize = 21;
-pub const FRAME_OP1_ADDR: usize = 22;
-pub const FRAME_INST: usize = 23;
-pub const FRAME_DST: usize = 24;
-pub const FRAME_OP0: usize = 25;
-pub const FRAME_OP1: usize = 26;
-pub const OFF_DST: usize = 27;
-pub const OFF_OP0: usize = 28;
-pub const OFF_OP1: usize = 29;
-pub const FRAME_T0: usize = 30;
-pub const FRAME_T1: usize = 31;
-pub const FRAME_MUL: usize = 32;
-pub const EXTRA_ADDR: usize = 33;
-pub const EXTRA_VAL: usize = 34;
-pub const RC_HOLES: usize = 35;
-
-// Auxiliary range check columns
-pub const RANGE_CHECK_COL_1: usize = 0;
-pub const RANGE_CHECK_COL_2: usize = 1;
-pub const RANGE_CHECK_COL_3: usize = 2;
-pub const RANGE_CHECK_COL_4: usize = 3;
-
-// Auxiliary memory columns
-pub const MEMORY_ADDR_SORTED_0: usize = 4;
-pub const MEMORY_ADDR_SORTED_1: usize = 5;
-pub const MEMORY_ADDR_SORTED_2: usize = 6;
-pub const MEMORY_ADDR_SORTED_3: usize = 7;
-pub const MEMORY_ADDR_SORTED_4: usize = 8;
-
-pub const MEMORY_VALUES_SORTED_0: usize = 9;
-pub const MEMORY_VALUES_SORTED_1: usize = 10;
-pub const MEMORY_VALUES_SORTED_2: usize = 11;
-pub const MEMORY_VALUES_SORTED_3: usize = 12;
-pub const MEMORY_VALUES_SORTED_4: usize = 13;
-
-pub const PERMUTATION_ARGUMENT_COL_0: usize = 14;
-pub const PERMUTATION_ARGUMENT_COL_1: usize = 15;
-pub const PERMUTATION_ARGUMENT_COL_2: usize = 16;
-pub const PERMUTATION_ARGUMENT_COL_3: usize = 17;
-pub const PERMUTATION_ARGUMENT_COL_4: usize = 18;
-
-pub const PERMUTATION_ARGUMENT_RANGE_CHECK_COL_1: usize = 19;
-pub const PERMUTATION_ARGUMENT_RANGE_CHECK_COL_2: usize = 20;
-pub const PERMUTATION_ARGUMENT_RANGE_CHECK_COL_3: usize = 21;
-pub const PERMUTATION_ARGUMENT_RANGE_CHECK_COL_4: usize = 22;
-
-// Trace layout
-pub const MEM_P_TRACE_OFFSET: usize = 17;
-pub const MEM_A_TRACE_OFFSET: usize = 19;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum SegmentName {
@@ -434,110 +381,12 @@ pub struct CairoAIR {
         Vec<Box<dyn TransitionConstraint<Stark252PrimeField, Stark252PrimeField>>>,
 }
 
-/// Receives two slices corresponding to the accessed addresses and values, filled with
-/// the memory holes and with the (0, 0) public memory dummy accesses.
-/// Each (address, value) public memory pair is written in a (0, 0) dummy access until
-/// there is no one left.
-///
-/// NOTE: At the end of this process there might be some additional (0, 0) dummy accesses
-/// that were not overwritten. This is not a problem as long as all the public memory pairs
-/// have been written.
-fn add_pub_memory_in_public_input_section(
-    addresses: &[Felt252],
-    values: &[Felt252],
-    public_input: &PublicInputs,
-) -> (Vec<Felt252>, Vec<Felt252>) {
-    let mut a_aux = addresses.to_owned();
-    let mut v_aux = values.to_owned();
-
-    let mut pub_addrs = public_input.public_memory.iter();
-
-    // Iterate over addresses
-    for (i, a) in a_aux.iter_mut().enumerate() {
-        // When address `0` is found, it means it corresponds to a dummy access.
-        if a == &Felt252::zero() {
-            // While there are public memory addresses left, overwrite the dummy
-            // (addr, value) accesses with the real public memory pairs.
-            if let Some((pub_addr, pub_value)) = pub_addrs.next() {
-                *a = *pub_addr;
-                v_aux[i] = *pub_value;
-            } else {
-                // When there are no public memory pairs left to write, break the
-                // loop and return the (addr, value) pairs with dummy accesses
-                // overwritten.
-                break;
-            }
-        }
-    }
-
-    (a_aux, v_aux)
-}
-
-fn sort_columns_by_memory_address(
-    adresses: Vec<Felt252>,
-    values: Vec<Felt252>,
-) -> (Vec<Felt252>, Vec<Felt252>) {
-    let mut tuples: Vec<_> = adresses.into_iter().zip(values).collect();
-    tuples.sort_by(|(x, _), (y, _)| x.representative().cmp(&y.representative()));
-    tuples.into_iter().unzip()
-}
-
-fn generate_memory_permutation_argument_column(
-    addresses_original: Vec<Felt252>,
-    values_original: Vec<Felt252>,
-    addresses_sorted: &[Felt252],
-    values_sorted: &[Felt252],
-    rap_challenges: &[Felt252],
-) -> Vec<Felt252> {
-    let z = &rap_challenges[1];
-    let alpha = &rap_challenges[0];
-
-    let mut denom: Vec<_> = addresses_sorted
-        .iter()
-        .zip(values_sorted)
-        .map(|(ap, vp)| z - (ap + alpha * vp))
-        .collect();
-    FieldElement::inplace_batch_inverse(&mut denom).unwrap();
-    // Returns the cumulative products of the numerators and denominators
-    addresses_original
-        .iter()
-        .zip(&values_original)
-        .zip(&denom)
-        .scan(Felt252::one(), |product, ((a_i, v_i), den_i)| {
-            let ret = *product;
-            *product = ret * ((z - (a_i + alpha * v_i)) * den_i);
-            Some(*product)
-        })
-        .collect::<Vec<Felt252>>()
-}
-
-fn generate_range_check_permutation_argument_column(
-    offset_column_original: &[Felt252],
-    offset_column_sorted: &[Felt252],
-    rap_challenges: &[Felt252],
-) -> Vec<Felt252> {
-    let z = rap_challenges[2];
-
-    let mut denom: Vec<_> = offset_column_sorted.iter().map(|x| z - x).collect();
-    FieldElement::inplace_batch_inverse(&mut denom).unwrap();
-
-    offset_column_original
-        .iter()
-        .zip(&denom)
-        .scan(Felt252::one(), |product, (num_i, den_i)| {
-            let ret = *product;
-            *product = ret * (z - num_i) * den_i;
-            Some(*product)
-        })
-        .collect::<Vec<Felt252>>()
-}
-
 impl AIR for CairoAIR {
     type Field = Stark252PrimeField;
     type FieldExtension = Stark252PrimeField;
     type PublicInputs = PublicInputs;
 
-    const STEP_SIZE: usize = 1;
+    const STEP_SIZE: usize = 16;
 
     /// Creates a new CairoAIR from proof_options
     ///
@@ -552,26 +401,12 @@ impl AIR for CairoAIR {
         proof_options: &ProofOptions,
     ) -> Self {
         debug_assert!(trace_length.is_power_of_two());
-        let trace_columns = 59;
+        let trace_columns = 8;
 
         let transition_constraints: Vec<
             Box<dyn TransitionConstraint<Stark252PrimeField, Stark252PrimeField>>,
         > = vec![
-            Box::new(BitPrefixFlag0::new()),
-            Box::new(BitPrefixFlag1::new()),
-            Box::new(BitPrefixFlag2::new()),
-            Box::new(BitPrefixFlag3::new()),
-            Box::new(BitPrefixFlag4::new()),
-            Box::new(BitPrefixFlag5::new()),
-            Box::new(BitPrefixFlag6::new()),
-            Box::new(BitPrefixFlag7::new()),
-            Box::new(BitPrefixFlag8::new()),
-            Box::new(BitPrefixFlag9::new()),
-            Box::new(BitPrefixFlag10::new()),
-            Box::new(BitPrefixFlag11::new()),
-            Box::new(BitPrefixFlag12::new()),
-            Box::new(BitPrefixFlag13::new()),
-            Box::new(BitPrefixFlag14::new()),
+            Box::new(BitPrefixFlag::new()),
             Box::new(ZeroFlagConstraint::new()),
             Box::new(InstructionUnpacking::new()),
             Box::new(CpuOperandsMemDstAddr::new()),
@@ -588,29 +423,11 @@ impl AIR for CairoAIR {
             Box::new(CpuOpcodesCallPushFp::new()),
             Box::new(CpuOpcodesCallPushPc::new()),
             Box::new(CpuOpcodesAssertEq::new()),
-            Box::new(MemoryDiffIsBit0::new()),
-            Box::new(MemoryDiffIsBit1::new()),
-            Box::new(MemoryDiffIsBit2::new()),
-            Box::new(MemoryDiffIsBit3::new()),
-            Box::new(MemoryDiffIsBit4::new()),
-            Box::new(MemoryIsFunc0::new()),
-            Box::new(MemoryIsFunc1::new()),
-            Box::new(MemoryIsFunc2::new()),
-            Box::new(MemoryIsFunc3::new()),
-            Box::new(MemoryIsFunc4::new()),
-            Box::new(MemoryMultiColumnPermStep0_0::new()),
-            Box::new(MemoryMultiColumnPermStep0_1::new()),
-            Box::new(MemoryMultiColumnPermStep0_2::new()),
-            Box::new(MemoryMultiColumnPermStep0_3::new()),
-            Box::new(MemoryMultiColumnPermStep0_4::new()),
-            Box::new(Rc16DiffIsBit0::new()),
-            Box::new(Rc16DiffIsBit1::new()),
-            Box::new(Rc16DiffIsBit2::new()),
-            Box::new(Rc16DiffIsBit3::new()),
-            Box::new(Rc16PermStep0_0::new()),
-            Box::new(Rc16PermStep0_1::new()),
-            Box::new(Rc16PermStep0_2::new()),
-            Box::new(Rc16PermStep0_3::new()),
+            Box::new(MemoryDiffIsBit::new()),
+            Box::new(MemoryIsFunc::new()),
+            Box::new(MemoryMultiColumnPermStep0::new()),
+            Box::new(Rc16DiffIsBit::new()),
+            Box::new(Rc16PermStep0::new()),
             Box::new(FlagOp1BaseOp0BitConstraint::new()),
             Box::new(FlagResOp1BitConstraint::new()),
             Box::new(FlagPcUpdateRegularBit::new()),
@@ -638,10 +455,8 @@ impl AIR for CairoAIR {
             (0..transition_constraints.len())
                 .for_each(|idx| debug_assert!(constraints_set.iter().contains(&idx)));
 
-            assert_eq!(transition_constraints.len(), 64);
+            assert_eq!(transition_constraints.len(), 32);
         }
-
-        assert_eq!(transition_constraints.len(), 64);
 
         let transition_exemptions = transition_constraints
             .iter()
@@ -673,92 +488,15 @@ impl AIR for CairoAIR {
 
     fn build_auxiliary_trace(
         &self,
-        main_trace: &TraceTable<Self::Field>,
+        trace: &mut TraceTable<Self::Field, Self::FieldExtension>,
         rap_challenges: &[Felt252],
-    ) -> TraceTable<Self::Field> {
-        let addresses_original = main_trace.merge_columns(&[
-            FRAME_PC,
-            FRAME_DST_ADDR,
-            FRAME_OP0_ADDR,
-            FRAME_OP1_ADDR,
-            EXTRA_ADDR,
-        ]);
+    ) {
+        let alpha_mem = rap_challenges[0];
+        let z_mem = rap_challenges[1];
+        let z_rc = rap_challenges[2];
 
-        let values_original =
-            main_trace.merge_columns(&[FRAME_INST, FRAME_DST, FRAME_OP0, FRAME_OP1, EXTRA_VAL]);
-
-        let (addresses, values) = add_pub_memory_in_public_input_section(
-            &addresses_original,
-            &values_original,
-            &self.pub_inputs,
-        );
-
-        let (addresses, values) = sort_columns_by_memory_address(addresses, values);
-
-        let permutation_col = generate_memory_permutation_argument_column(
-            addresses_original,
-            values_original,
-            &addresses,
-            &values,
-            rap_challenges,
-        );
-
-        // Range Check
-        let offsets_original = main_trace.merge_columns(&[OFF_DST, OFF_OP0, OFF_OP1, RC_HOLES]);
-
-        let mut offsets_sorted: Vec<u16> = offsets_original
-            .iter()
-            .map(|x| x.representative().into())
-            .collect();
-        offsets_sorted.sort();
-        let offsets_sorted: Vec<_> = offsets_sorted
-            .iter()
-            .map(|x| FieldElement::from(*x as u64))
-            .collect();
-
-        let range_check_permutation_col = generate_range_check_permutation_argument_column(
-            &offsets_original,
-            &offsets_sorted,
-            rap_challenges,
-        );
-
-        // Convert from long-format to wide-format again
-        let mut aux_data = Vec::new();
-        for i in 0..main_trace.n_rows() {
-            aux_data.push(offsets_sorted[4 * i]);
-            aux_data.push(offsets_sorted[4 * i + 1]);
-            aux_data.push(offsets_sorted[4 * i + 2]);
-            aux_data.push(offsets_sorted[4 * i + 3]);
-            aux_data.push(addresses[5 * i]);
-            aux_data.push(addresses[5 * i + 1]);
-            aux_data.push(addresses[5 * i + 2]);
-            aux_data.push(addresses[5 * i + 3]);
-            aux_data.push(addresses[5 * i + 4]);
-            aux_data.push(values[5 * i]);
-            aux_data.push(values[5 * i + 1]);
-            aux_data.push(values[5 * i + 2]);
-            aux_data.push(values[5 * i + 3]);
-            aux_data.push(values[5 * i + 4]);
-            aux_data.push(permutation_col[5 * i]);
-            aux_data.push(permutation_col[5 * i + 1]);
-            aux_data.push(permutation_col[5 * i + 2]);
-            aux_data.push(permutation_col[5 * i + 3]);
-            aux_data.push(permutation_col[5 * i + 4]);
-            aux_data.push(range_check_permutation_col[4 * i]);
-            aux_data.push(range_check_permutation_col[4 * i + 1]);
-            aux_data.push(range_check_permutation_col[4 * i + 2]);
-            aux_data.push(range_check_permutation_col[4 * i + 3]);
-        }
-
-        let aux_table = Table::new(aux_data, self.num_auxiliary_rap_columns());
-
-        let (num_main_columns, num_aux_columns) = self.trace_layout();
-        TraceTable {
-            table: aux_table,
-            num_main_columns,
-            num_aux_columns,
-            step_size: Self::STEP_SIZE,
-        }
+        set_rc_permutation_column(trace, &z_rc);
+        set_mem_permutation_column(trace, &alpha_mem, &z_mem);
     }
 
     fn build_rap_challenges(
@@ -773,7 +511,7 @@ impl AIR for CairoAIR {
     }
 
     fn trace_layout(&self) -> (usize, usize) {
-        (36, 23)
+        (6, 2)
     }
 
     /// From the Cairo whitepaper, section 9.10.
@@ -785,57 +523,60 @@ impl AIR for CairoAIR {
     ///  * pc_0 = pc_i
     ///  * pc_t = pc_f
     fn boundary_constraints(&self, rap_challenges: &[Felt252]) -> BoundaryConstraints<Self::Field> {
-        let initial_pc =
-            BoundaryConstraint::new_main(MEM_A_TRACE_OFFSET, 0, self.pub_inputs.pc_init);
-        let initial_ap =
-            BoundaryConstraint::new_main(MEM_P_TRACE_OFFSET, 0, self.pub_inputs.ap_init);
+        let initial_pc = BoundaryConstraint::new_main(3, 0, self.pub_inputs.pc_init);
+        let initial_ap = BoundaryConstraint::new_main(5, 0, self.pub_inputs.ap_init);
 
         let final_pc = BoundaryConstraint::new_main(
-            MEM_A_TRACE_OFFSET,
-            self.pub_inputs.num_steps - 1,
+            3,
+            self.trace_length - Self::STEP_SIZE,
             self.pub_inputs.pc_final,
         );
         let final_ap = BoundaryConstraint::new_main(
-            MEM_P_TRACE_OFFSET,
-            self.pub_inputs.num_steps - 1,
+            5,
+            self.trace_length - Self::STEP_SIZE,
             self.pub_inputs.ap_final,
         );
 
-        // Auxiliary constraint: permutation argument final value
-        let final_index = self.trace_length - 1;
-
         let z_memory = rap_challenges[1];
         let alpha_memory = rap_challenges[0];
+        let one: FieldElement<Self::Field> = FieldElement::one();
 
-        let cumulative_product = self
+        let mem_cumul_prod_denominator_no_padding = self
             .pub_inputs
             .public_memory
             .iter()
-            .fold(FieldElement::one(), |product, (address, value)| {
+            .fold(one, |product, (address, value)| {
                 product * (z_memory - (address + alpha_memory * value))
-            })
+            });
+
+        const PUB_MEMORY_ADDR_OFFSET: usize = 8;
+        let pad_addr = Felt252::one();
+        let pad_value = self.pub_inputs.public_memory.get(&pad_addr).unwrap();
+        let val = z_memory - (pad_addr + alpha_memory * pad_value);
+        let mem_cumul_prod_denominator_pad = val
+            .pow(self.trace_length / PUB_MEMORY_ADDR_OFFSET - self.pub_inputs.public_memory.len());
+        let mem_cumul_prod_denominator = (mem_cumul_prod_denominator_no_padding
+            * mem_cumul_prod_denominator_pad)
             .inv()
             .unwrap();
+        let mem_cumul_prod_final =
+            z_memory.pow(self.trace_length / PUB_MEMORY_ADDR_OFFSET) * mem_cumul_prod_denominator;
 
-        let permutation_final =
-            z_memory.pow(self.pub_inputs.public_memory.len()) * cumulative_product;
+        let mem_cumul_prod_final_constraint =
+            BoundaryConstraint::new_aux(1, self.trace_length - 2, mem_cumul_prod_final);
 
-        let permutation_final_constraint =
-            BoundaryConstraint::new_aux(PERMUTATION_ARGUMENT_COL_4, final_index, permutation_final);
+        let rc_cumul_prod_final_constraint =
+            BoundaryConstraint::new_aux(0, self.trace_length - 1, one);
 
-        let one: FieldElement<Self::Field> = FieldElement::one();
-        let range_check_final_constraint =
-            BoundaryConstraint::new_aux(PERMUTATION_ARGUMENT_RANGE_CHECK_COL_4, final_index, one);
-
-        let range_check_min = BoundaryConstraint::new_aux(
-            RANGE_CHECK_COL_1,
+        let rc_min_constraint = BoundaryConstraint::new_main(
+            2,
             0,
             FieldElement::from(self.pub_inputs.range_check_min.unwrap() as u64),
         );
 
-        let range_check_max = BoundaryConstraint::new_aux(
-            RANGE_CHECK_COL_4,
-            final_index,
+        let rc_max_constraint = BoundaryConstraint::new_main(
+            2,
+            self.trace_length - 1,
             FieldElement::from(self.pub_inputs.range_check_max.unwrap() as u64),
         );
 
@@ -844,10 +585,10 @@ impl AIR for CairoAIR {
             initial_ap,
             final_pc,
             final_ap,
-            permutation_final_constraint,
-            range_check_final_constraint,
-            range_check_min,
-            range_check_max,
+            mem_cumul_prod_final_constraint,
+            rc_cumul_prod_final_constraint,
+            rc_min_constraint,
+            rc_max_constraint,
         ];
 
         BoundaryConstraints::from_constraints(constraints)
@@ -889,7 +630,7 @@ impl AIR for CairoAIR {
 /// concrete types.
 /// The field is set to Stark252PrimeField and the AIR to CairoAIR.
 pub fn generate_cairo_proof(
-    trace: &TraceTable<Stark252PrimeField>,
+    trace: &mut CairoTraceTable,
     pub_input: &PublicInputs,
     proof_options: &ProofOptions,
 ) -> Result<StarkProof<Stark252PrimeField, Stark252PrimeField>, ProvingError> {
@@ -917,93 +658,6 @@ pub fn verify_cairo_proof(
     )
 }
 
-#[cfg(test)]
-#[cfg(debug_assertions)]
-mod test {
-    use super::*;
-    use lambdaworks_math::field::element::FieldElement;
-
-    #[test]
-    fn test_build_auxiliary_trace_sort_columns_by_memory_address() {
-        let a = vec![
-            FieldElement::from(2),
-            FieldElement::one(),
-            FieldElement::from(3),
-            FieldElement::from(2),
-        ];
-        let v = vec![
-            FieldElement::from(6),
-            FieldElement::from(4),
-            FieldElement::from(5),
-            FieldElement::from(6),
-        ];
-        let (ap, vp) = sort_columns_by_memory_address(a, v);
-        assert_eq!(
-            ap,
-            vec![
-                FieldElement::one(),
-                FieldElement::from(2),
-                FieldElement::from(2),
-                FieldElement::from(3)
-            ]
-        );
-        assert_eq!(
-            vp,
-            vec![
-                FieldElement::from(4),
-                FieldElement::from(6),
-                FieldElement::from(6),
-                FieldElement::from(5),
-            ]
-        );
-    }
-
-    #[test]
-    fn test_build_auxiliary_trace_generate_permutation_argument_column() {
-        let a = vec![
-            FieldElement::from(3),
-            FieldElement::one(),
-            FieldElement::from(2),
-        ];
-        let v = vec![
-            FieldElement::from(5),
-            FieldElement::one(),
-            FieldElement::from(2),
-        ];
-        let ap = vec![
-            FieldElement::one(),
-            FieldElement::from(2),
-            FieldElement::from(3),
-        ];
-        let vp = vec![
-            FieldElement::one(),
-            FieldElement::from(2),
-            FieldElement::from(5),
-        ];
-        let rap_challenges = vec![
-            FieldElement::from(15),
-            FieldElement::from(10),
-            FieldElement::zero(),
-        ];
-
-        let p = generate_memory_permutation_argument_column(a, v, &ap, &vp, &rap_challenges);
-        assert_eq!(
-            p,
-            vec![
-                FieldElement::from_hex(
-                    "2aaaaaaaaaaaab0555555555555555555555555555555555555555555555561"
-                )
-                .unwrap(),
-                FieldElement::from_hex(
-                    "1745d1745d174602e8ba2e8ba2e8ba2e8ba2e8ba2e8ba2e8ba2e8ba2e8ba2ec"
-                )
-                .unwrap(),
-                FieldElement::one(),
-            ]
-        );
-    }
-}
-
 #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
 #[cfg(test)]
 mod prop_test {
@@ -1015,8 +669,8 @@ mod prop_test {
     use stark_platinum_prover::proof::{options::ProofOptions, stark::StarkProof};
 
     use crate::{
-        air::{generate_cairo_proof, verify_cairo_proof},
         cairo_layout::CairoLayout,
+        layouts::plain::air::{generate_cairo_proof, verify_cairo_proof},
         runner::run::generate_prover_args,
         tests::utils::cairo0_program_path,
         Felt252,
@@ -1083,13 +737,13 @@ mod prop_test {
     #[test]
     fn deserialize_and_verify() {
         let program_content = std::fs::read(cairo0_program_path("fibonacci_10.json")).unwrap();
-        let (main_trace, pub_inputs) =
+        let (mut main_trace, pub_inputs) =
             generate_prover_args(&program_content, CairoLayout::Plain).unwrap();
 
         let proof_options = ProofOptions::default_test_options();
 
         // The proof is generated and serialized.
-        let proof = generate_cairo_proof(&main_trace, &pub_inputs, &proof_options).unwrap();
+        let proof = generate_cairo_proof(&mut main_trace, &pub_inputs, &proof_options).unwrap();
         let proof_bytes: Vec<u8> = serde_cbor::to_vec(&proof).unwrap();
 
         // The trace and original proof are dropped to show that they are decoupled from

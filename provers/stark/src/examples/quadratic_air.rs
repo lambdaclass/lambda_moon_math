@@ -161,7 +161,7 @@ where
 pub fn quadratic_trace<F: IsFFTField>(
     initial_value: FieldElement<F>,
     trace_length: usize,
-) -> TraceTable<F> {
+) -> TraceTable<F, F> {
     let mut ret: Vec<FieldElement<F>> = vec![];
 
     ret.push(initial_value);
@@ -170,5 +170,5 @@ pub fn quadratic_trace<F: IsFFTField>(
         ret.push(ret[i - 1].clone() * ret[i - 1].clone());
     }
 
-    TraceTable::from_columns(vec![ret], 1, 1)
+    TraceTable::from_columns_main(vec![ret], 1)
 }

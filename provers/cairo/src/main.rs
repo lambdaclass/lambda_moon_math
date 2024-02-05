@@ -1,6 +1,8 @@
 use lambdaworks_math::field::fields::fft_friendly::stark_252_prime_field::Stark252PrimeField;
-use platinum_prover::air::{generate_cairo_proof, verify_cairo_proof, PublicInputs};
 use platinum_prover::cairo_layout::CairoLayout;
+use platinum_prover::layouts::plain::air::{
+    generate_cairo_proof, verify_cairo_proof, PublicInputs,
+};
 use platinum_prover::runner::run::generate_prover_args;
 use platinum_prover::runner::run::generate_prover_args_from_trace;
 use stark_platinum_prover::proof::options::{ProofOptions, SecurityLevel};
@@ -122,7 +124,7 @@ fn generate_proof(
     // FIXME: We should set this through the CLI in the future
     let layout = CairoLayout::Plain;
 
-    let Ok((main_trace, pub_inputs)) = generate_prover_args(&program_content, layout) else {
+    let Ok((mut main_trace, pub_inputs)) = generate_prover_args(&program_content, layout) else {
         eprintln!("Error generating prover args");
         return None;
     };
@@ -131,7 +133,7 @@ fn generate_proof(
 
     let timer = Instant::now();
     println!("Making proof ...");
-    let proof = match generate_cairo_proof(&main_trace, &pub_inputs, proof_options) {
+    let proof = match generate_cairo_proof(&mut main_trace, &pub_inputs, proof_options) {
         Ok(p) => p,
         Err(err) => {
             eprintln!("Error generating proof: {:?}", err);
@@ -154,7 +156,7 @@ fn generate_proof_from_trace(
 )> {
     // ## Generating the prover args
     let timer = Instant::now();
-    let Ok((main_trace, pub_inputs)) =
+    let Ok((mut main_trace, pub_inputs)) =
         generate_prover_args_from_trace(trace_bin_path, memory_bin_path)
     else {
         eprintln!("Error generating prover args");
@@ -165,7 +167,7 @@ fn generate_proof_from_trace(
     // ## Prove
     let timer = Instant::now();
     println!("Making proof ...");
-    let proof = match generate_cairo_proof(&main_trace, &pub_inputs, proof_options) {
+    let proof = match generate_cairo_proof(&mut main_trace, &pub_inputs, proof_options) {
         Ok(p) => p,
         Err(err) => {
             eprintln!("Error generating proof: {:?}", err);

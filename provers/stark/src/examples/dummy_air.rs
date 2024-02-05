@@ -198,7 +198,7 @@ impl AIR for DummyAIR {
     }
 }
 
-pub fn dummy_trace<F: IsFFTField>(trace_length: usize) -> TraceTable<F> {
+pub fn dummy_trace<F: IsFFTField>(trace_length: usize) -> TraceTable<F, F> {
     let mut ret: Vec<FieldElement<F>> = vec![];
 
     let a0 = FieldElement::one();
@@ -211,9 +211,5 @@ pub fn dummy_trace<F: IsFFTField>(trace_length: usize) -> TraceTable<F> {
         ret.push(ret[i - 1].clone() + ret[i - 2].clone());
     }
 
-    TraceTable::from_columns(
-        vec![vec![FieldElement::<F>::one(); trace_length], ret],
-        2,
-        1,
-    )
+    TraceTable::from_columns_main(vec![vec![FieldElement::<F>::one(); trace_length], ret], 1)
 }

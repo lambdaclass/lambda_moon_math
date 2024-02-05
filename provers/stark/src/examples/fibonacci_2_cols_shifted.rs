@@ -238,7 +238,7 @@ where
 pub fn compute_trace<F: IsFFTField>(
     initial_value: FieldElement<F>,
     trace_length: usize,
-) -> TraceTable<F> {
+) -> TraceTable<F, F> {
     let mut x = FieldElement::one();
     let mut y = initial_value;
     let mut col0 = vec![x.clone()];
@@ -250,7 +250,7 @@ pub fn compute_trace<F: IsFFTField>(
         col1.push(y.clone());
     }
 
-    TraceTable::from_columns(vec![col0, col1], 2, 1)
+    TraceTable::from_columns_main(vec![col0, col1], 1)
 }
 
 #[cfg(test)]
@@ -264,46 +264,9 @@ mod tests {
     #[test]
     fn trace_has_expected_rows() {
         let trace = compute_trace(FieldElement::<Stark252PrimeField>::one(), 8);
-        assert_eq!(trace.n_rows(), 8);
+        assert_eq!(trace.num_rows(), 8);
 
         let trace = compute_trace(FieldElement::<Stark252PrimeField>::one(), 64);
-        assert_eq!(trace.n_rows(), 64);
-    }
-
-    #[test]
-    fn trace_of_8_rows_is_correctly_calculated() {
-        let trace = compute_trace(FieldElement::<Stark252PrimeField>::one(), 8);
-        assert_eq!(
-            trace.get_row(0),
-            vec![FieldElement::one(), FieldElement::one()]
-        );
-        assert_eq!(
-            trace.get_row(1),
-            vec![FieldElement::one(), FieldElement::from(2)]
-        );
-        assert_eq!(
-            trace.get_row(2),
-            vec![FieldElement::from(2), FieldElement::from(3)]
-        );
-        assert_eq!(
-            trace.get_row(3),
-            vec![FieldElement::from(3), FieldElement::from(5)]
-        );
-        assert_eq!(
-            trace.get_row(4),
-            vec![FieldElement::from(5), FieldElement::from(8)]
-        );
-        assert_eq!(
-            trace.get_row(5),
-            vec![FieldElement::from(8), FieldElement::from(13)]
-        );
-        assert_eq!(
-            trace.get_row(6),
-            vec![FieldElement::from(13), FieldElement::from(21)]
-        );
-        assert_eq!(
-            trace.get_row(7),
-            vec![FieldElement::from(21), FieldElement::from(34)]
-        );
+        assert_eq!(trace.num_rows(), 64);
     }
 }

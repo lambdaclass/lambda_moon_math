@@ -186,15 +186,15 @@ where
 
     fn build_auxiliary_trace(
         &self,
-        main_trace: &TraceTable<Self::Field>,
+        trace: &mut TraceTable<Self::Field, Self::FieldExtension>,
         challenges: &[FieldElement<F>],
-    ) -> TraceTable<Self::Field> {
-        let main_segment_cols = main_trace.columns();
+    ) {
+        let main_segment_cols = trace.columns_main();
         let not_perm = &main_segment_cols[0];
         let perm = &main_segment_cols[1];
         let gamma = &challenges[0];
 
-        let trace_len = main_trace.n_rows();
+        let trace_len = trace.num_rows();
 
         let mut aux_col = Vec::new();
         for i in 0..trace_len {
@@ -208,7 +208,10 @@ where
                 aux_col.push(z_i * n_p_term.div(p_term));
             }
         }
-        TraceTable::from_columns(vec![aux_col], 0, 1)
+
+        for (i, aux_elem) in aux_col.iter().enumerate().take(trace.num_rows()) {
+            trace.set_aux(i, 0, aux_elem.clone())
+        }
     }
 
     fn build_rap_challenges(
@@ -236,7 +239,6 @@ where
         let a0_aux = BoundaryConstraint::new_aux(0, 0, FieldElement::<Self::FieldExtension>::one());
 
         BoundaryConstraints::from_constraints(vec![a0, a1, a0_aux])
-        // BoundaryConstraints::from_constraints(vec![a0, a1])
     }
 
     fn transition_constraints(
@@ -274,9 +276,8 @@ where
 pub fn fibonacci_rap_trace<F: IsFFTField>(
     initial_values: [FieldElement<F>; 2],
     trace_length: usize,
-) -> TraceTable<F> {
+) -> TraceTable<F, F> {
     let mut fib_seq: Vec<FieldElement<F>> = vec![];
-
     fib_seq.push(initial_values[0].clone());
     fib_seq.push(initial_values[1].clone());
 
@@ -294,7 +295,13 @@ pub fn fibonacci_rap_trace<F: IsFFTField>(
     let mut trace_cols = vec![fib_seq, fib_permuted];
     resize_to_next_power_of_two(&mut trace_cols);
 
-    TraceTable::from_columns(trace_cols, 2, 1)
+    let mut trace = TraceTable::allocate_with_zeros(trace_cols[0].len(), 2, 1, 1);
+    for i in 0..trace.num_rows() {
+        trace.set_main(i, 0, trace_cols[0][i].clone());
+        trace.set_main(i, 1, trace_cols[1][i].clone());
+    }
+
+    trace
 }
 
 #[cfg(test)]
@@ -337,13 +344,13 @@ mod test {
         ];
         resize_to_next_power_of_two(&mut expected_trace);
 
-        assert_eq!(trace.columns(), expected_trace);
+        assert_eq!(trace.columns_main(), expected_trace);
     }
 
     #[test]
     fn aux_col() {
         let trace = fibonacci_rap_trace([FE17::from(1), FE17::from(1)], 64);
-        let trace_cols = trace.columns();
+        let trace_cols = trace.columns_main();
 
         let not_perm = trace_cols[0].clone();
         let perm = trace_cols[1].clone();

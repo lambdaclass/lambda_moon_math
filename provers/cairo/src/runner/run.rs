@@ -1,22 +1,16 @@
-use crate::air::{PublicInputs, Segment, SegmentName};
+use super::vec_writer::VecWriter;
 use crate::cairo_layout::CairoLayout;
 use crate::cairo_mem::CairoMemory;
-use crate::execution_trace::build_main_trace;
+use crate::execution_trace::{build_cairo_execution_trace, CairoTraceTable};
+use crate::layouts::plain::air::{PublicInputs, Segment, SegmentName};
 use crate::register_states::RegisterStates;
 use crate::Felt252;
-
-use super::vec_writer::VecWriter;
 use cairo_vm::cairo_run::{self, EncodeTraceError};
-
 use cairo_vm::hint_processor::builtin_hint_processor::builtin_hint_processor_definition::BuiltinHintProcessor;
-
 use cairo_vm::vm::errors::{
     cairo_run_errors::CairoRunError, trace_errors::TraceError, vm_errors::VirtualMachineError,
 };
-
 use cairo_vm::without_std::collections::HashMap;
-use lambdaworks_math::field::fields::fft_friendly::stark_252_prime_field::Stark252PrimeField;
-use stark_platinum_prover::trace::TraceTable;
 
 #[derive(Debug)]
 pub enum Error {
@@ -159,18 +153,18 @@ pub fn run_program(
 pub fn generate_prover_args(
     program_content: &[u8],
     layout: CairoLayout,
-) -> Result<(TraceTable<Stark252PrimeField>, PublicInputs), Error> {
-    let (register_states, memory, mut public_inputs) = run_program(None, layout, program_content)?;
+) -> Result<(CairoTraceTable, PublicInputs), Error> {
+    let (register_states, memory, mut pub_inputs) = run_program(None, layout, program_content)?;
 
-    let main_trace = build_main_trace(&register_states, &memory, &mut public_inputs);
+    let main_trace = build_cairo_execution_trace(&register_states, &memory, &mut pub_inputs);
 
-    Ok((main_trace, public_inputs))
+    Ok((main_trace, pub_inputs))
 }
 
 pub fn generate_prover_args_from_trace(
     trace_bin_path: &str,
     memory_bin_path: &str,
-) -> Result<(TraceTable<Stark252PrimeField>, PublicInputs), Error> {
+) -> Result<(CairoTraceTable, PublicInputs), Error> {
     // ## Generating the prover args
     let register_states =
         RegisterStates::from_file(trace_bin_path).expect("Cairo trace bin file not found");
@@ -181,7 +175,7 @@ pub fn generate_prover_args_from_trace(
     let data_len = 0_usize;
     let mut pub_inputs = PublicInputs::from_regs_and_mem(&register_states, &memory, data_len);
 
-    let main_trace = build_main_trace(&register_states, &memory, &mut pub_inputs);
+    let main_trace = build_cairo_execution_trace(&register_states, &memory, &mut pub_inputs);
 
     Ok((main_trace, pub_inputs))
 }
