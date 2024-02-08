@@ -202,7 +202,7 @@ where
 }
 
 // returns 0 if n is 0
-fn log_2(n: usize) -> usize {
+pub fn log_2(n: usize) -> usize {
     if n == 0 {
         return 0;
     }

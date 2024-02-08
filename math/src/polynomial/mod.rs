@@ -1,7 +1,10 @@
 use super::field::element::FieldElement;
 use crate::field::traits::{IsField, IsSubFieldOf};
 use alloc::{borrow::ToOwned, vec, vec::Vec};
-use core::{fmt::Display, ops};
+use core::{
+    fmt::Display,
+    ops::{self, Index, IndexMut},
+};
 
 pub mod dense_multilinear_poly;
 mod error;
@@ -269,6 +272,27 @@ impl<F: IsField> Polynomial<FieldElement<F>> {
                 .map(|x| x.to_extension::<L>())
                 .collect(),
         }
+    }
+}
+
+impl<F: IsField> Index<usize> for Polynomial<FieldElement<F>>
+where
+    <F as IsField>::BaseType: Send + Sync,
+{
+    type Output = FieldElement<F>;
+
+    #[inline(always)]
+    fn index(&self, _index: usize) -> &FieldElement<F> {
+        &(self.coefficients[_index])
+    }
+}
+
+impl<F: IsField> IndexMut<usize> for Polynomial<FieldElement<F>>
+where
+    <F as IsField>::BaseType: Send + Sync,
+{
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        &mut self.coefficients[index]
     }
 }
 

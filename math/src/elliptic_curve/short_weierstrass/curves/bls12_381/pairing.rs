@@ -1,4 +1,5 @@
 use super::curve::MILLER_LOOP_CONSTANT;
+use super::default_types::FrField;
 use super::{
     curve::BLS12381Curve,
     field_extension::{BLS12381PrimeField, Degree12ExtensionField, Degree2ExtensionField},
@@ -26,6 +27,7 @@ impl IsPairing for BLS12381AtePairing {
     type G1Point = ShortWeierstrassProjectivePoint<BLS12381Curve>;
     type G2Point = ShortWeierstrassProjectivePoint<BLS12381TwistCurve>;
     type OutputField = Degree12ExtensionField;
+    type BaseField = FrField;
 
     /// Compute the product of the ate pairings for a list of point pairs.
     fn compute_batch(

@@ -40,6 +40,7 @@ pub trait IsPairing {
     type G1Point: IsGroup;
     type G2Point: IsGroup;
     type OutputField: IsField;
+    type BaseField: IsField;
 
     /// Compute the product of the pairings for a list of point pairs.
     fn compute_batch(

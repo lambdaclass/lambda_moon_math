@@ -1,6 +1,8 @@
-use super::traits::IsCommitmentScheme;
-use alloc::{borrow::ToOwned, vec::Vec};
-use core::{marker::PhantomData, mem};
+use crate::fiat_shamir::transcript::Transcript;
+
+use super::traits::IsPolynomialCommitmentScheme;
+use alloc::vec::Vec;
+use core::{borrow::Borrow, marker::PhantomData, mem};
 use lambdaworks_math::{
     cyclic_group::IsGroup,
     elliptic_curve::traits::IsPairing,
@@ -8,7 +10,7 @@ use lambdaworks_math::{
     field::{element::FieldElement, traits::IsPrimeField},
     msm::pippenger::msm,
     polynomial::Polynomial,
-    traits::{AsBytes, Deserializable},
+    traits::{AsBytes, ByteConversion, Deserializable},
     unsigned_integer::element::UnsignedInteger,
 };
 
@@ -116,7 +118,7 @@ where
             main_group.push(point);
         }
 
-        let g2s_offset = size_g1_point * main_group_len + 12;
+        let g2s_offset = size_g1_point * main_group_len + MAIN_GROUP_OFFSET;
         for i in 0..2 {
             // The second unwrap shouldn't fail since the amount of bytes is fixed
             let point = G2Point::deserialize(
@@ -151,9 +153,14 @@ impl<F: IsPrimeField, P: IsPairing> KateZaveruchaGoldberg<F, P> {
 }
 
 impl<const N: usize, F: IsPrimeField<RepresentativeType = UnsignedInteger<N>>, P: IsPairing>
-    IsCommitmentScheme<F> for KateZaveruchaGoldberg<F, P>
+    IsPolynomialCommitmentScheme<F> for KateZaveruchaGoldberg<F, P>
+where
+    FieldElement<F>: ByteConversion,
 {
     type Commitment = P::G1Point;
+    type Polynomial = Polynomial<FieldElement<F>>;
+    type Proof = P::G1Point;
+    type Point = FieldElement<F>;
 
     fn commit(&self, p: &Polynomial<FieldElement<F>>) -> Self::Commitment {
         let coefficients: Vec<_> = p
@@ -170,21 +177,26 @@ impl<const N: usize, F: IsPrimeField<RepresentativeType = UnsignedInteger<N>>, P
 
     fn open(
         &self,
-        x: &FieldElement<F>,
-        y: &FieldElement<F>,
-        p: &Polynomial<FieldElement<F>>,
+        // point polynomial `p` is evaluated at.
+        point: impl Borrow<Self::Point>,
+        // evaluation of polynomial `p` at `point` `p`(`point`) = `eval`.
+        eval: &FieldElement<F>,
+        // polynomial proof is being generated with respect to.
+        poly: &Polynomial<FieldElement<F>>,
+        _transcript: Option<&mut dyn Transcript>,
     ) -> Self::Commitment {
-        let mut poly_to_commit = p - y;
-        poly_to_commit.ruffini_division_inplace(x);
+        let mut poly_to_commit = poly - eval;
+        poly_to_commit.ruffini_division_inplace(point.borrow());
         self.commit(&poly_to_commit)
     }
 
     fn verify(
         &self,
-        x: &FieldElement<F>,
-        y: &FieldElement<F>,
+        point: impl Borrow<Self::Point>,
+        eval: &FieldElement<F>,
         p_commitment: &Self::Commitment,
-        proof: &Self::Commitment,
+        proof: &Self::Proof,
+        _transcript: Option<&mut dyn Transcript>,
     ) -> bool {
         let g1 = &self.srs.powers_main_group[0];
         let g2 = &self.srs.powers_secondary_group[0];
@@ -192,12 +204,13 @@ impl<const N: usize, F: IsPrimeField<RepresentativeType = UnsignedInteger<N>>, P
 
         let e = P::compute_batch(&[
             (
-                &p_commitment.operate_with(&(g1.operate_with_self(y.representative())).neg()),
+                &p_commitment.operate_with(&(g1.operate_with_self(eval.representative())).neg()),
                 g2,
             ),
             (
                 &proof.neg(),
-                &(alpha_g2.operate_with(&(g2.operate_with_self(x.representative())).neg())),
+                &(alpha_g2
+                    .operate_with(&(g2.operate_with_self(point.borrow().representative())).neg())),
             ),
         ]);
         e == Ok(FieldElement::one())
@@ -205,48 +218,52 @@ impl<const N: usize, F: IsPrimeField<RepresentativeType = UnsignedInteger<N>>, P
 
     fn open_batch(
         &self,
-        x: &FieldElement<F>,
-        ys: &[FieldElement<F>],
-        polynomials: &[Polynomial<FieldElement<F>>],
-        upsilon: &FieldElement<F>,
+        point: impl Borrow<Self::Point>,
+        evals: &[FieldElement<F>],
+        polys: &[Polynomial<FieldElement<F>>],
+        transcript: Option<&mut dyn Transcript>,
     ) -> Self::Commitment {
-        let acc_polynomial = polynomials
+        let transcript = transcript.unwrap();
+        let upsilon = FieldElement::<F>::from_bytes_be(&transcript.challenge()).unwrap();
+        let acc_polynomial = polys
             .iter()
             .rev()
             .fold(Polynomial::zero(), |acc, polynomial| {
-                acc * upsilon.to_owned() + polynomial
+                acc * &upsilon + polynomial
             });
 
-        let acc_y = ys
+        let acc_y = evals
             .iter()
             .rev()
-            .fold(FieldElement::zero(), |acc, y| acc * upsilon.to_owned() + y);
+            .fold(FieldElement::zero(), |acc, y| acc * &upsilon + y);
 
-        self.open(x, &acc_y, &acc_polynomial)
+        self.open(point, &acc_y, &acc_polynomial, None)
     }
 
     fn verify_batch(
         &self,
-        x: &FieldElement<F>,
-        ys: &[FieldElement<F>],
+        point: impl Borrow<Self::Point>,
+        evals: &[FieldElement<F>],
         p_commitments: &[Self::Commitment],
         proof: &Self::Commitment,
-        upsilon: &FieldElement<F>,
+        transcript: Option<&mut dyn Transcript>,
     ) -> bool {
+        let transcript = transcript.unwrap();
+        let upsilon = FieldElement::<F>::from_bytes_be(&transcript.challenge()).unwrap();
         let acc_commitment =
             p_commitments
                 .iter()
                 .rev()
                 .fold(P::G1Point::neutral_element(), |acc, point| {
-                    acc.operate_with_self(upsilon.to_owned().representative())
+                    acc.operate_with_self(upsilon.representative())
                         .operate_with(point)
                 });
 
-        let acc_y = ys
+        let acc_y = evals
             .iter()
             .rev()
-            .fold(FieldElement::zero(), |acc, y| acc * upsilon.to_owned() + y);
-        self.verify(x, &acc_y, &acc_commitment, proof)
+            .fold(FieldElement::zero(), |acc, y| acc * &upsilon + y);
+        self.verify(point, &acc_y, &acc_commitment, proof, None)
     }
 }
 
@@ -273,7 +290,10 @@ mod tests {
         unsigned_integer::element::U256,
     };
 
-    use crate::commitments::traits::IsCommitmentScheme;
+    use crate::{
+        commitments::traits::IsPolynomialCommitmentScheme,
+        fiat_shamir::default_transcript::DefaultTranscript,
+    };
 
     use super::{KateZaveruchaGoldberg, StructuredReferenceString};
     use rand::Rng;
@@ -317,10 +337,10 @@ mod tests {
         let p_commitment: <BLS12381AtePairing as IsPairing>::G1Point = kzg.commit(&p);
         let x = -FieldElement::one();
         let y = p.evaluate(&x);
-        let proof = kzg.open(&x, &y, &p);
+        let proof = kzg.open(&x, &y, &p, None);
         assert_eq!(y, FieldElement::zero());
         assert_eq!(proof, BLS12381Curve::generator());
-        assert!(kzg.verify(&x, &y, &p_commitment, &proof));
+        assert!(kzg.verify(&x, &y, &p_commitment, &proof, None));
     }
 
     #[test]
@@ -330,8 +350,8 @@ mod tests {
         let p_commitment: <BLS12381AtePairing as IsPairing>::G1Point = kzg.commit(&p);
         let x = FieldElement::one();
         let y = FieldElement::from(9000);
-        let proof = kzg.open(&x, &y, &p);
-        assert!(kzg.verify(&x, &y, &p_commitment, &proof));
+        let proof = kzg.open(&x, &y, &p, None);
+        assert!(kzg.verify(&x, &y, &p_commitment, &proof, None));
     }
 
     #[test]
@@ -342,11 +362,18 @@ mod tests {
 
         let x = FieldElement::one();
         let y0 = FieldElement::from(9000);
-        let upsilon = &FieldElement::from(1);
 
-        let proof = kzg.open_batch(&x, &[y0.clone()], &[p0], upsilon);
+        let mut prover_transcript = DefaultTranscript::new();
+        let proof = kzg.open_batch(&x, &[y0.clone()], &[p0], Some(&mut prover_transcript));
 
-        assert!(kzg.verify_batch(&x, &[y0], &[p0_commitment], &proof, upsilon));
+        let mut verifier_transcript = DefaultTranscript::new();
+        assert!(kzg.verify_batch(
+            &x,
+            &[y0],
+            &[p0_commitment],
+            &proof,
+            Some(&mut verifier_transcript),
+        ));
     }
 
     #[test]
@@ -357,16 +384,22 @@ mod tests {
 
         let x = FieldElement::one();
         let y0 = FieldElement::from(9000);
-        let upsilon = &FieldElement::from(1);
 
-        let proof = kzg.open_batch(&x, &[y0.clone(), y0.clone()], &[p0.clone(), p0], upsilon);
+        let mut prover_transcript = DefaultTranscript::new();
+        let proof = kzg.open_batch(
+            &x,
+            &[y0.clone(), y0.clone()],
+            &[p0.clone(), p0],
+            Some(&mut prover_transcript),
+        );
 
+        let mut verifier_transcript = DefaultTranscript::new();
         assert!(kzg.verify_batch(
             &x,
             &[y0.clone(), y0],
             &[p0_commitment.clone(), p0_commitment],
             &proof,
-            upsilon
+            Some(&mut verifier_transcript),
         ));
     }
 
@@ -388,16 +421,21 @@ mod tests {
         let p1_commitment: <BLS12381AtePairing as IsPairing>::G1Point = kzg.commit(&p1);
         let y1 = p1.evaluate(&x);
 
-        let upsilon = &FieldElement::from(1);
+        let mut prover_transcript = DefaultTranscript::new();
+        let proof = kzg.open_batch(
+            &x,
+            &[y0.clone(), y1.clone()],
+            &[p0, p1],
+            Some(&mut prover_transcript),
+        );
 
-        let proof = kzg.open_batch(&x, &[y0.clone(), y1.clone()], &[p0, p1], upsilon);
-
+        let mut verifier_transcript = DefaultTranscript::new();
         assert!(kzg.verify_batch(
             &x,
             &[y0, y1],
             &[p0_commitment, p1_commitment],
             &proof,
-            upsilon
+            Some(&mut verifier_transcript),
         ));
     }
 

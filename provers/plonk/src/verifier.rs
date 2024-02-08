@@ -1,20 +1,22 @@
-use lambdaworks_crypto::commitments::traits::IsCommitmentScheme;
+use lambdaworks_crypto::commitments::traits::IsPolynomialCommitmentScheme;
+use lambdaworks_crypto::fiat_shamir::default_transcript::DefaultTranscript;
 use lambdaworks_crypto::fiat_shamir::transcript::Transcript;
 use lambdaworks_math::cyclic_group::IsGroup;
 use lambdaworks_math::field::element::FieldElement;
 use lambdaworks_math::field::traits::{IsFFTField, IsField, IsPrimeField};
 use lambdaworks_math::traits::{AsBytes, ByteConversion};
+use std::borrow::Borrow;
 use std::marker::PhantomData;
 
 use crate::prover::Proof;
 use crate::setup::{new_strong_fiat_shamir_transcript, CommonPreprocessedInput, VerificationKey};
 
-pub struct Verifier<F: IsField, CS: IsCommitmentScheme<F>> {
+pub struct Verifier<F: IsField, CS: IsPolynomialCommitmentScheme<F>> {
     commitment_scheme: CS,
     phantom: PhantomData<F>,
 }
 
-impl<F: IsField + IsFFTField, CS: IsCommitmentScheme<F>> Verifier<F, CS> {
+impl<F: IsField + IsFFTField, CS: IsPolynomialCommitmentScheme<F>> Verifier<F, CS> {
     pub fn new(commitment_scheme: CS) -> Self {
         Self {
             commitment_scheme,
@@ -25,17 +27,14 @@ impl<F: IsField + IsFFTField, CS: IsCommitmentScheme<F>> Verifier<F, CS> {
     fn compute_challenges(
         &self,
         p: &Proof<F, CS>,
-        vk: &VerificationKey<CS::Commitment>,
-        public_input: &[FieldElement<F>],
-    ) -> [FieldElement<F>; 5]
+        transcript: &mut DefaultTranscript,
+    ) -> [FieldElement<F>; 4]
     where
         F: IsField,
-        CS: IsCommitmentScheme<F>,
+        CS: IsPolynomialCommitmentScheme<F>,
         CS::Commitment: AsBytes,
         FieldElement<F>: ByteConversion,
     {
-        let mut transcript = new_strong_fiat_shamir_transcript::<F, CS>(vk, public_input);
-
         transcript.append(&p.a_1.as_bytes());
         transcript.append(&p.b_1.as_bytes());
         transcript.append(&p.c_1.as_bytes());
@@ -56,9 +55,8 @@ impl<F: IsField + IsFFTField, CS: IsCommitmentScheme<F>> Verifier<F, CS> {
         transcript.append(&p.s1_zeta.to_bytes_be());
         transcript.append(&p.s2_zeta.to_bytes_be());
         transcript.append(&p.z_zeta_omega.to_bytes_be());
-        let upsilon = FieldElement::from_bytes_be(&transcript.challenge()).unwrap();
 
-        [beta, gamma, alpha, zeta, upsilon]
+        [beta, gamma, alpha, zeta]
     }
 
     pub fn verify(
@@ -70,12 +68,14 @@ impl<F: IsField + IsFFTField, CS: IsCommitmentScheme<F>> Verifier<F, CS> {
     ) -> bool
     where
         F: IsPrimeField + IsFFTField,
-        CS: IsCommitmentScheme<F>,
+        CS: IsPolynomialCommitmentScheme<F>,
         CS::Commitment: AsBytes + IsGroup,
         FieldElement<F>: ByteConversion,
+        FieldElement<F>: Borrow<<CS as IsPolynomialCommitmentScheme<F>>::Point>,
     {
         // TODO: First three steps are validations: belonging to main subgroup, belonging to prime field.
-        let [beta, gamma, alpha, zeta, upsilon] = self.compute_challenges(p, vk, public_input);
+        let mut transcript = new_strong_fiat_shamir_transcript::<F, CS>(vk, public_input);
+        let [beta, gamma, alpha, zeta] = self.compute_challenges(p, &mut transcript);
         let zh_zeta = zeta.pow(input.n) - FieldElement::<F>::one();
 
         let k1 = &input.k1;
@@ -178,15 +178,20 @@ impl<F: IsField + IsFFTField, CS: IsCommitmentScheme<F>> Verifier<F, CS> {
             vk.s1_1.clone(),
             vk.s2_1.clone(),
         ];
-        let batch_openings_check =
-            self.commitment_scheme
-                .verify_batch(&zeta, &ys, &commitments, &p.w_zeta_1, &upsilon);
+        let batch_openings_check = self.commitment_scheme.verify_batch(
+            zeta.clone(),
+            &ys,
+            &commitments,
+            &p.w_zeta_1,
+            Some(&mut transcript),
+        );
 
         let single_opening_check = self.commitment_scheme.verify(
-            &(zeta * &input.omega),
+            zeta.clone() * &input.omega,
             &p.z_zeta_omega,
             &p.z_1,
             &p.w_zeta_omega_1,
+            Some(&mut transcript),
         );
 
         constraints_check && batch_openings_check && single_opening_check

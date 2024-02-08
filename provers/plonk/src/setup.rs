@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::constraint_system::{get_permutation, ConstraintSystem, Variable};
 use crate::test_utils::utils::{generate_domain, generate_permutation_coefficients};
-use lambdaworks_crypto::commitments::traits::IsCommitmentScheme;
+use lambdaworks_crypto::commitments::traits::IsPolynomialCommitmentScheme;
 use lambdaworks_crypto::fiat_shamir::default_transcript::DefaultTranscript;
 use lambdaworks_crypto::fiat_shamir::transcript::Transcript;
 use lambdaworks_math::field::traits::IsFFTField;
@@ -112,10 +112,13 @@ pub struct VerificationKey<G1Point> {
     pub s3_1: G1Point,
 }
 
-pub fn setup<F: IsField, CS: IsCommitmentScheme<F>>(
+pub fn setup<F: IsField, CS: IsPolynomialCommitmentScheme<F>>(
     common_input: &CommonPreprocessedInput<F>,
     commitment_scheme: &CS,
-) -> VerificationKey<CS::Commitment> {
+) -> VerificationKey<CS::Commitment>
+where
+    CS: IsPolynomialCommitmentScheme<F, Polynomial = Polynomial<FieldElement<F>>>,
+{
     VerificationKey {
         qm_1: commitment_scheme.commit(&common_input.qm),
         ql_1: commitment_scheme.commit(&common_input.ql),
@@ -136,7 +139,7 @@ pub fn new_strong_fiat_shamir_transcript<F, CS>(
 where
     F: IsField,
     FieldElement<F>: ByteConversion,
-    CS: IsCommitmentScheme<F>,
+    CS: IsPolynomialCommitmentScheme<F>,
     CS::Commitment: AsBytes,
 {
     let mut transcript = DefaultTranscript::new();
