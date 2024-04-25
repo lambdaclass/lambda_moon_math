@@ -4,7 +4,9 @@ use lambdaworks_math::fft::errors::FFTError;
 use lambdaworks_math::field::traits::{IsField, IsSubFieldOf};
 use lambdaworks_math::{
     field::{element::FieldElement, traits::IsFFTField},
+    gpu::icicle::IcicleFFT,
     polynomial::Polynomial,
+    traits::ByteConversion,
 };
 #[cfg(feature = "parallel")]
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
@@ -137,7 +139,8 @@ impl<F: IsField> TraceTable<F> {
     pub fn compute_trace_polys<S>(&self) -> Vec<Polynomial<FieldElement<F>>>
     where
         S: IsFFTField + IsSubFieldOf<F>,
-        FieldElement<F>: Send + Sync,
+        FieldElement<F>: Send + Sync + ByteConversion,
+        F: IcicleFFT + IsFFTField,
     {
         let columns = self.columns();
         #[cfg(feature = "parallel")]

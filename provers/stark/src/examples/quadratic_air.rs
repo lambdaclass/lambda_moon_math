@@ -11,7 +11,11 @@ use crate::{
     trace::TraceTable,
     traits::AIR,
 };
-use lambdaworks_math::field::{element::FieldElement, traits::IsFFTField};
+use lambdaworks_math::{
+    field::{element::FieldElement, traits::IsFFTField},
+    gpu::icicle::IcicleFFT,
+    traits::ByteConversion,
+};
 
 #[derive(Clone)]
 struct QuadraticConstraint<F: IsFFTField> {
@@ -28,7 +32,8 @@ impl<F: IsFFTField> QuadraticConstraint<F> {
 
 impl<F> TransitionConstraint<F, F> for QuadraticConstraint<F>
 where
-    F: IsFFTField + Send + Sync,
+    F: IsFFTField + Send + Sync + IcicleFFT,
+    FieldElement<F>: ByteConversion,
 {
     fn degree(&self) -> usize {
         2
@@ -81,7 +86,8 @@ where
 
 impl<F> AIR for QuadraticAIR<F>
 where
-    F: IsFFTField + Send + Sync + 'static,
+    F: IsFFTField + Send + Sync + 'static + IcicleFFT,
+    FieldElement<F>: ByteConversion,
 {
     type Field = F;
     type FieldExtension = F;

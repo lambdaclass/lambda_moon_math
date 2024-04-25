@@ -9,12 +9,18 @@ use std::marker::PhantomData;
 use crate::prover::Proof;
 use crate::setup::{new_strong_fiat_shamir_transcript, CommonPreprocessedInput, VerificationKey};
 
+//TODO: feature gate
+use lambdaworks_math::gpu::icicle::IcicleFFT;
+
 pub struct Verifier<F: IsField, CS: IsCommitmentScheme<F>> {
     commitment_scheme: CS,
     phantom: PhantomData<F>,
 }
 
-impl<F: IsField + IsFFTField, CS: IsCommitmentScheme<F>> Verifier<F, CS> {
+impl<F: IsField + IsFFTField + IcicleFFT, CS: IsCommitmentScheme<F>> Verifier<F, CS>
+where
+    FieldElement<F>: ByteConversion,
+{
     pub fn new(commitment_scheme: CS) -> Self {
         Self {
             commitment_scheme,

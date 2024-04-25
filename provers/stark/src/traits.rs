@@ -6,7 +6,9 @@ use lambdaworks_math::{
         element::FieldElement,
         traits::{IsFFTField, IsField, IsSubFieldOf},
     },
+    gpu::icicle::IcicleFFT,
     polynomial::Polynomial,
+    traits::ByteConversion,
 };
 
 use crate::{constraints::transition::TransitionConstraint, domain::Domain};
@@ -124,7 +126,11 @@ pub trait AIR {
         vec![]
     }
 
-    fn get_periodic_column_polynomials(&self) -> Vec<Polynomial<FieldElement<Self::Field>>> {
+    fn get_periodic_column_polynomials(&self) -> Vec<Polynomial<FieldElement<Self::Field>>>
+    where
+        <Self as AIR>::Field: IcicleFFT,
+        FieldElement<<Self as AIR>::Field>: ByteConversion,
+    {
         let mut result = Vec::new();
         for periodic_column in self.get_periodic_column_values() {
             let values: Vec<_> = periodic_column
@@ -150,7 +156,11 @@ pub trait AIR {
     fn transition_zerofier_evaluations(
         &self,
         domain: &Domain<Self::Field>,
-    ) -> Vec<Vec<FieldElement<Self::Field>>> {
+    ) -> Vec<Vec<FieldElement<Self::Field>>>
+    where
+        Self::Field: IcicleFFT,
+        FieldElement<Self::Field>: ByteConversion,
+    {
         let mut evals = vec![Vec::new(); self.num_transition_constraints()];
 
         let mut zerofier_groups: HashMap<ZerofierGroupKey, Vec<FieldElement<Self::Field>>> =

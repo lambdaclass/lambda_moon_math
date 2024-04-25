@@ -14,7 +14,8 @@ use lambdaworks_math::{
         element::FieldElement,
         traits::{IsFFTField, IsField, IsSubFieldOf},
     },
-    traits::AsBytes,
+    gpu::icicle::IcicleFFT,
+    traits::{AsBytes, ByteConversion},
 };
 #[cfg(not(feature = "test_fiat_shamir"))]
 use log::error;
@@ -216,7 +217,11 @@ pub trait IsStarkVerifier<A: AIR> {
         proof: &StarkProof<A::Field, A::FieldExtension>,
         domain: &Domain<A::Field>,
         challenges: &Challenges<A>,
-    ) -> bool {
+    ) -> bool
+    where
+        A::Field: IcicleFFT,
+        FieldElement<<A as AIR>::Field>: ByteConversion,
+    {
         let boundary_constraints = air.boundary_constraints(&challenges.rap_challenges);
 
         let trace_length = air.trace_length();
@@ -710,8 +715,9 @@ pub trait IsStarkVerifier<A: AIR> {
         mut transcript: impl IsTranscript<A::FieldExtension>,
     ) -> bool
     where
-        FieldElement<A::Field>: AsBytes + Sync + Send,
+        FieldElement<A::Field>: AsBytes + Sync + Send + ByteConversion,
         FieldElement<A::FieldExtension>: AsBytes + Sync + Send,
+        A::Field: IcicleFFT,
     {
         // Verify there are enough queries
         if proof.query_list.len() < proof_options.fri_number_of_queries {

@@ -10,7 +10,9 @@ use lambdaworks_math::field::traits::{IsField, IsSubFieldOf};
 use lambdaworks_math::traits::AsBytes;
 use lambdaworks_math::{
     field::{element::FieldElement, traits::IsFFTField},
+    gpu::icicle::IcicleFFT,
     polynomial::Polynomial,
+    traits::ByteConversion,
 };
 use log::info;
 
@@ -154,7 +156,8 @@ pub fn evaluate_polynomial_on_lde_domain<F, E>(
 ) -> Result<Vec<FieldElement<E>>, FFTError>
 where
     F: IsFFTField + IsSubFieldOf<E>,
-    E: IsField,
+    E: IsField + IsFFTField + IcicleFFT,
+    FieldElement<E>: ByteConversion,
 {
     let evaluations = Polynomial::evaluate_offset_fft(p, blowup_factor, Some(domain_size), offset)?;
     let step = evaluations.len() / (domain_size * blowup_factor);
@@ -203,9 +206,9 @@ pub trait IsStarkProver<A: AIR> {
     )
     where
         FieldElement<A::Field>: AsBytes + Send + Sync,
-        FieldElement<E>: AsBytes + Send + Sync,
+        FieldElement<E>: AsBytes + Send + Sync + ByteConversion,
         FieldElement<A::FieldExtension>: AsBytes + Send + Sync,
-        E: IsSubFieldOf<A::FieldExtension>,
+        E: IsSubFieldOf<A::FieldExtension> + IcicleFFT + IsFFTField,
         A::Field: IsSubFieldOf<E>,
     {
         // Interpolate columns of `trace`.
@@ -243,8 +246,8 @@ pub trait IsStarkProver<A: AIR> {
     ) -> Vec<Vec<FieldElement<E>>>
     where
         FieldElement<A::Field>: Send + Sync,
-        FieldElement<E>: Send + Sync,
-        E: IsSubFieldOf<A::FieldExtension>,
+        FieldElement<E>: Send + Sync + ByteConversion,
+        E: IsSubFieldOf<A::FieldExtension> + IsFFTField + IcicleFFT,
         A::Field: IsSubFieldOf<E>,
     {
         #[cfg(not(feature = "parallel"))]
@@ -273,8 +276,10 @@ pub trait IsStarkProver<A: AIR> {
         transcript: &mut impl IsTranscript<A::FieldExtension>,
     ) -> Result<Round1<A>, ProvingError>
     where
-        FieldElement<A::Field>: AsBytes + Send + Sync,
-        FieldElement<A::FieldExtension>: AsBytes + Send + Sync,
+        A::Field: IcicleFFT,
+        A::FieldExtension: IsFFTField + IcicleFFT,
+        FieldElement<A::Field>: AsBytes + Send + Sync + ByteConversion,
+        FieldElement<A::FieldExtension>: AsBytes + Send + Sync + ByteConversion,
     {
         let (trace_polys, evaluations, main_merkle_tree, main_merkle_root) =
             Self::interpolate_and_commit::<A::Field>(main_trace, domain, transcript);
@@ -358,8 +363,10 @@ pub trait IsStarkProver<A: AIR> {
     ) -> Round2<A::FieldExtension>
     where
         A: Send + Sync,
-        FieldElement<A::Field>: AsBytes + Send + Sync,
-        FieldElement<A::FieldExtension>: AsBytes + Send + Sync,
+        A::Field: IcicleFFT,
+        A::FieldExtension: IsFFTField + IcicleFFT,
+        FieldElement<A::Field>: AsBytes + Send + Sync + ByteConversion,
+        FieldElement<A::FieldExtension>: AsBytes + Send + Sync + ByteConversion,
     {
         // Compute the evaluations of the composition polynomial on the LDE domain.
         let evaluator = ConstraintEvaluator::new(air, &round_1_result.rap_challenges);
@@ -464,8 +471,9 @@ pub trait IsStarkProver<A: AIR> {
         transcript: &mut impl IsTranscript<A::FieldExtension>,
     ) -> Round4<A::Field, A::FieldExtension>
     where
+        A::FieldExtension: IsFFTField + IcicleFFT,
         FieldElement<A::Field>: AsBytes + Send + Sync,
-        FieldElement<A::FieldExtension>: AsBytes + Send + Sync,
+        FieldElement<A::FieldExtension>: AsBytes + Send + Sync + ByteConversion,
     {
         let coset_offset_u64 = air.context().proof_options.coset_offset;
         let coset_offset = FieldElement::<A::Field>::from(coset_offset_u64);
@@ -797,8 +805,10 @@ pub trait IsStarkProver<A: AIR> {
     ) -> Result<StarkProof<A::Field, A::FieldExtension>, ProvingError>
     where
         A: Send + Sync,
-        FieldElement<A::Field>: AsBytes + Send + Sync,
-        FieldElement<A::FieldExtension>: AsBytes + Send + Sync,
+        A::Field: IcicleFFT,
+        A::FieldExtension: IsFFTField + IcicleFFT,
+        FieldElement<A::Field>: AsBytes + Send + Sync + ByteConversion,
+        FieldElement<A::FieldExtension>: AsBytes + Send + Sync + ByteConversion,
     {
         info!("Started proof generation...");
         #[cfg(feature = "instruments")]

@@ -15,6 +15,8 @@ use lambdaworks_math::field::{
     element::FieldElement, fields::fft_friendly::stark_252_prime_field::Stark252PrimeField,
     traits::IsFFTField,
 };
+use lambdaworks_math::gpu::icicle::IcicleFFT;
+use lambdaworks_math::traits::ByteConversion;
 
 type StarkField = Stark252PrimeField;
 
@@ -32,7 +34,8 @@ impl<F: IsFFTField> FibConstraint<F> {
 
 impl<F> TransitionConstraint<F, F> for FibConstraint<F>
 where
-    F: IsFFTField + Send + Sync,
+    F: IsFFTField + Send + Sync + IcicleFFT,
+    FieldElement<F>: ByteConversion,
 {
     fn degree(&self) -> usize {
         1
@@ -81,7 +84,8 @@ impl<F: IsFFTField> BitConstraint<F> {
 
 impl<F> TransitionConstraint<F, F> for BitConstraint<F>
 where
-    F: IsFFTField + Send + Sync,
+    F: IsFFTField + Send + Sync + IcicleFFT,
+    FieldElement<F>: ByteConversion,
 {
     fn degree(&self) -> usize {
         2

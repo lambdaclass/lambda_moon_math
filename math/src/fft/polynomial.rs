@@ -7,6 +7,8 @@ use crate::{
         traits::{IsFFTField, RootsConfig},
     },
     polynomial::Polynomial,
+    traits::ByteConversion,
+    gpu::icicle::{IcicleFFT, GpuMSMPoint}
 };
 use alloc::{vec, vec::Vec};
 
@@ -14,10 +16,15 @@ use alloc::{vec, vec::Vec};
 use crate::fft::gpu::cuda::polynomial::{evaluate_fft_cuda, interpolate_fft_cuda};
 #[cfg(feature = "metal")]
 use crate::fft::gpu::metal::polynomial::{evaluate_fft_metal, interpolate_fft_metal};
+#[cfg(feature = "icicle")]
+use crate::gpu::icicle::{evaluate_fft_icicle, interpolate_fft_icicle};
 
 use super::cpu::{ops, roots_of_unity};
 
-impl<E: IsField> Polynomial<FieldElement<E>> {
+impl<E: IsField + IsFFTField + IcicleFFT> Polynomial<FieldElement<E>>
+where
+    FieldElement<E>: ByteConversion,
+{
     /// Returns `N` evaluations of this polynomial using FFT over a domain in a subfield F of E (so the results
     /// are P(w^i), with w being a primitive root of unity).
     /// `N = max(self.coeff_len(), domain_size).next_power_of_two() * blowup_factor`.
@@ -26,7 +33,10 @@ impl<E: IsField> Polynomial<FieldElement<E>> {
         poly: &Polynomial<FieldElement<E>>,
         blowup_factor: usize,
         domain_size: Option<usize>,
-    ) -> Result<Vec<FieldElement<E>>, FFTError> {
+    ) -> Result<Vec<FieldElement<E>>, FFTError>
+    where
+        FieldElement<E>: ByteConversion,
+    {
         let domain_size = domain_size.unwrap_or(0);
         let len = core::cmp::max(poly.coeff_len(), domain_size).next_power_of_two() * blowup_factor;
 
@@ -51,17 +61,20 @@ impl<E: IsField> Polynomial<FieldElement<E>> {
             }
         }
 
-        #[cfg(feature = "cuda")]
+        #[cfg(feature = "icicle")]
         {
-            // TODO: support multiple fields with CUDA
-            if F::field_name() == "stark256" {
-                Ok(evaluate_fft_cuda(&coeffs)?)
+            if !F::field_name().is_empty() {
+                Ok(evaluate_fft_icicle::<F, E>(&coeffs)?)
             } else {
+                println!(
+                    "GPU evaluation failed for field {}. Program will fallback to CPU.",
+                    core::any::type_name::<F>()
+                );
                 evaluate_fft_cpu::<F, E>(&coeffs)
             }
         }
 
-        #[cfg(all(not(feature = "metal"), not(feature = "cuda")))]
+        #[cfg(all(not(feature = "metal"), not(feature = "icicle")))]
         {
             evaluate_fft_cpu::<F, E>(&coeffs)
         }
@@ -76,7 +89,10 @@ impl<E: IsField> Polynomial<FieldElement<E>> {
         blowup_factor: usize,
         domain_size: Option<usize>,
         offset: &FieldElement<F>,
-    ) -> Result<Vec<FieldElement<E>>, FFTError> {
+    ) -> Result<Vec<FieldElement<E>>, FFTError>
+    where
+        FieldElement<E>: ByteConversion,
+    {
         let scaled = poly.scale(offset);
         Polynomial::evaluate_fft::<F>(&scaled, blowup_factor, domain_size)
     }
@@ -100,16 +116,20 @@ impl<E: IsField> Polynomial<FieldElement<E>> {
             }
         }
 
-        #[cfg(feature = "cuda")]
+        #[cfg(feature = "icicle")]
         {
             if !F::field_name().is_empty() {
-                Ok(interpolate_fft_cuda(fft_evals)?)
+                Ok(interpolate_fft_icicle::<F, E>(fft_evals)?)
             } else {
-                interpolate_fft_cpu::<F, E>(fft_evals)
+                println!(
+                    "GPU evaluation failed for field {}. Program will fallback to CPU.",
+                    core::any::type_name::<F>()
+                );
+                interpolate_fft_cpu::<F, E>(&fft_evals)
             }
         }
 
-        #[cfg(all(not(feature = "metal"), not(feature = "cuda")))]
+        #[cfg(all(not(feature = "metal"), not(feature = "icicle")))]
         {
             interpolate_fft_cpu::<F, E>(fft_evals)
         }
@@ -127,13 +147,13 @@ impl<E: IsField> Polynomial<FieldElement<E>> {
     }
 }
 
-pub fn compose_fft<F, E>(
-    poly_1: &Polynomial<FieldElement<E>>,
-    poly_2: &Polynomial<FieldElement<E>>,
-) -> Polynomial<FieldElement<E>>
+pub fn compose_fft<F>(
+    poly_1: &Polynomial<FieldElement<F>>,
+    poly_2: &Polynomial<FieldElement<F>>,
+) -> Polynomial<FieldElement<F>>
 where
-    F: IsFFTField + IsSubFieldOf<E>,
-    E: IsField,
+    F: IsFFTField + IcicleFFT,
+    FieldElement<F>: ByteConversion,
 {
     let poly_2_evaluations = Polynomial::evaluate_fft::<F>(poly_2, 1, None).unwrap();
 

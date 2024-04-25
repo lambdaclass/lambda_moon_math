@@ -8,7 +8,12 @@ use crate::{frame::Frame, prover::evaluate_polynomial_on_lde_domain};
 use itertools::Itertools;
 #[cfg(all(debug_assertions, not(feature = "parallel")))]
 use lambdaworks_math::polynomial::Polynomial;
-use lambdaworks_math::{fft::errors::FFTError, field::element::FieldElement, traits::AsBytes};
+use lambdaworks_math::{
+    fft::errors::FFTError,
+    field::element::FieldElement,
+    gpu::icicle::IcicleFFT,
+    traits::{AsBytes, ByteConversion},
+};
 #[cfg(feature = "parallel")]
 use rayon::{
     iter::IndexedParallelIterator,
@@ -39,9 +44,10 @@ impl<A: AIR> ConstraintEvaluator<A> {
         rap_challenges: &[FieldElement<A::FieldExtension>],
     ) -> Vec<FieldElement<A::FieldExtension>>
     where
-        FieldElement<A::Field>: AsBytes + Send + Sync,
+        FieldElement<A::Field>: AsBytes + Send + Sync + ByteConversion,
         FieldElement<A::FieldExtension>: AsBytes + Send + Sync,
         A: Send + Sync,
+        A::Field: IcicleFFT,
     {
         let boundary_constraints = &self.boundary_constraints;
         let number_of_b_constraints = boundary_constraints.constraints.len();

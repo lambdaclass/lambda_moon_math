@@ -66,29 +66,20 @@ impl Proof {
 pub struct Prover;
 impl Prover {
     pub fn prove(w: &[FrElement], qap: &QuadraticArithmeticProgram, pk: &ProvingKey) -> Proof {
-        let h_coefficients = qap
-            .calculate_h_coefficients(w)
-            .iter()
-            .map(|elem| elem.representative())
-            .collect::<Vec<_>>();
-
-        let w = w
-            .iter()
-            .map(|elem| elem.representative())
-            .collect::<Vec<_>>();
+        let h_coefficients = qap.calculate_h_coefficients(w);
 
         // Sample randomness for hiding
         let r = sample_fr_elem();
         let s = sample_fr_elem();
 
         // [π_1]_1
-        let pi1 = msm(&w, &pk.l_tau_g1)
+        let pi1 = msm(w, &pk.l_tau_g1)
             .unwrap()
             .operate_with(&pk.alpha_g1)
             .operate_with(&pk.delta_g1.operate_with_self(r.representative()));
 
         // [π_2]_2
-        let pi2 = msm(&w, &pk.r_tau_g2)
+        let pi2 = msm(w, &pk.r_tau_g2)
             .unwrap()
             .operate_with(&pk.beta_g2)
             .operate_with(&pk.delta_g2.operate_with_self(s.representative()));
@@ -108,7 +99,7 @@ impl Prover {
         .unwrap();
 
         // [π_2]_1
-        let pi2_g1 = msm(&w, &pk.r_tau_g1)
+        let pi2_g1 = msm(w, &pk.r_tau_g1)
             .unwrap()
             .operate_with(&pk.beta_g1)
             .operate_with(&pk.delta_g1.operate_with_self(s.representative()));

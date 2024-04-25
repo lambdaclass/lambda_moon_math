@@ -9,7 +9,11 @@ use crate::{
     trace::TraceTable,
     traits::AIR,
 };
-use lambdaworks_math::field::{element::FieldElement, traits::IsFFTField};
+use lambdaworks_math::{
+    field::{element::FieldElement, traits::IsFFTField},
+    gpu::icicle::IcicleFFT,
+    traits::ByteConversion,
+};
 use std::marker::PhantomData;
 
 #[derive(Clone)]
@@ -27,7 +31,8 @@ impl<F: IsFFTField> FibConstraint<F> {
 
 impl<F> TransitionConstraint<F, F> for FibConstraint<F>
 where
-    F: IsFFTField + Send + Sync,
+    F: IsFFTField + Send + Sync + IcicleFFT,
+    FieldElement<F>: ByteConversion,
 {
     fn degree(&self) -> usize {
         1
@@ -83,7 +88,8 @@ where
 
 impl<F> AIR for FibonacciAIR<F>
 where
-    F: IsFFTField + Send + Sync + 'static,
+    F: IsFFTField + Send + Sync + 'static + IcicleFFT,
+    FieldElement<F>: ByteConversion,
 {
     type Field = F;
     type FieldExtension = F;

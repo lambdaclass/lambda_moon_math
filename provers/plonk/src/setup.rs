@@ -11,6 +11,9 @@ use lambdaworks_math::field::{element::FieldElement, traits::IsField};
 use lambdaworks_math::polynomial::Polynomial;
 use lambdaworks_math::traits::{AsBytes, ByteConversion};
 
+//TODO: feature gate
+use lambdaworks_math::gpu::icicle::IcicleFFT;
+
 // TODO: implement getters
 pub struct Witness<F: IsField> {
     pub a: Vec<FieldElement<F>>,
@@ -34,7 +37,10 @@ impl<F: IsField> Witness<F> {
 
 // TODO: implement getters
 #[derive(Clone)]
-pub struct CommonPreprocessedInput<F: IsField> {
+pub struct CommonPreprocessedInput<F: IsField + IcicleFFT>
+where
+    FieldElement<F>: ByteConversion,
+{
     pub n: usize,
     /// Number of constraints
     pub domain: Vec<FieldElement<F>>,
@@ -56,7 +62,10 @@ pub struct CommonPreprocessedInput<F: IsField> {
     pub s3_lagrange: Vec<FieldElement<F>>,
 }
 
-impl<F: IsFFTField> CommonPreprocessedInput<F> {
+impl<F: IsFFTField + IcicleFFT> CommonPreprocessedInput<F>
+where
+    FieldElement<F>: ByteConversion,
+{
     pub fn from_constraint_system(
         system: &ConstraintSystem<F>,
         order_r_minus_1_root_unity: &FieldElement<F>,
@@ -113,10 +122,13 @@ pub struct VerificationKey<G1Point> {
     pub s3_1: G1Point,
 }
 
-pub fn setup<F: IsField, CS: IsCommitmentScheme<F>>(
+pub fn setup<F: IsField + IcicleFFT, CS: IsCommitmentScheme<F>>(
     common_input: &CommonPreprocessedInput<F>,
     commitment_scheme: &CS,
-) -> VerificationKey<CS::Commitment> {
+) -> VerificationKey<CS::Commitment>
+where
+    FieldElement<F>: ByteConversion,
+{
     VerificationKey {
         qm_1: commitment_scheme.commit(&common_input.qm),
         ql_1: commitment_scheme.commit(&common_input.ql),

@@ -11,6 +11,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 lambdaworks-math = { workspace = true , features = ["std", "lambdaworks-serde-binary"] }
 lambdaworks-crypto = { workspace = true, features = ["std", "serde"] }
+icicle-core = { git = "https://github.com/ingonyama-zk/icicle.git", tag = "v1.4.0" }
 miden-core = { git="https://github.com/lambdaclass/miden-vm", optional=true}
 
 rand = "0.8.5"

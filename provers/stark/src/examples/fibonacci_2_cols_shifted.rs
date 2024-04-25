@@ -11,7 +11,8 @@ use crate::{
 };
 use lambdaworks_math::{
     field::{element::FieldElement, traits::IsFFTField},
-    traits::AsBytes,
+    gpu::icicle::IcicleFFT,
+    traits::{AsBytes, ByteConversion},
 };
 use std::marker::PhantomData;
 
@@ -30,7 +31,8 @@ impl<F: IsFFTField> ShiftedFibTransition1<F> {
 
 impl<F> TransitionConstraint<F, F> for ShiftedFibTransition1<F>
 where
-    F: IsFFTField + Send + Sync,
+    F: IsFFTField + Send + Sync + IcicleFFT,
+    FieldElement<F>: ByteConversion,
 {
     fn degree(&self) -> usize {
         1
@@ -78,7 +80,8 @@ impl<F: IsFFTField> ShiftedFibTransition2<F> {
 
 impl<F> TransitionConstraint<F, F> for ShiftedFibTransition2<F>
 where
-    F: IsFFTField + Send + Sync,
+    F: IsFFTField + Send + Sync + IcicleFFT,
+    FieldElement<F>: ByteConversion,
 {
     fn degree(&self) -> usize {
         1
@@ -149,7 +152,8 @@ where
 /// for all `i`. Also, `Col0_0` is constrained to be `1`.
 impl<F> AIR for Fibonacci2ColsShifted<F>
 where
-    F: IsFFTField + Send + Sync + 'static,
+    F: IsFFTField + Send + Sync + 'static + IcicleFFT,
+    FieldElement<F>: ByteConversion,
 {
     type Field = F;
     type FieldExtension = F;

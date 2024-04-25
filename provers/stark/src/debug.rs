@@ -6,7 +6,9 @@ use lambdaworks_math::{
         element::FieldElement,
         traits::{IsFFTField, IsField},
     },
+    gpu::icicle::IcicleFFT,
     polynomial::Polynomial,
+    traits::ByteConversion,
 };
 use log::{error, info};
 
@@ -17,7 +19,13 @@ pub fn validate_trace<A: AIR>(
     aux_trace_polys: &[Polynomial<FieldElement<A::FieldExtension>>],
     domain: &Domain<A::Field>,
     rap_challenges: &[FieldElement<A::FieldExtension>],
-) -> bool {
+) -> bool
+where
+    <A as AIR>::Field: IcicleFFT,
+    FieldElement<<A as AIR>::Field>: ByteConversion,
+    FieldElement<<A as AIR>::FieldExtension>: ByteConversion,
+    <A as AIR>::FieldExtension: IsFFTField + IcicleFFT,
+{
     info!("Starting constraints validation over trace...");
     let mut ret = true;
 

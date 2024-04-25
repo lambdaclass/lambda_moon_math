@@ -10,7 +10,9 @@ use lambdaworks_math::{
 };
 pub use lambdaworks_math::{
     field::{element::FieldElement, fields::u64_prime_field::U64PrimeField},
+    gpu::icicle::IcicleFFT,
     polynomial::Polynomial,
+    traits::ByteConversion,
 };
 
 use crate::config::{BatchedMerkleTree, BatchedMerkleTreeBackend};
@@ -19,7 +21,7 @@ use self::fri_commitment::FriLayer;
 use self::fri_decommit::FriDecommitment;
 use self::fri_functions::fold_polynomial;
 
-pub fn commit_phase<F: IsFFTField + IsSubFieldOf<E>, E: IsField>(
+pub fn commit_phase<F: IsFFTField + IsSubFieldOf<E>, E: IsField + IsFFTField + IcicleFFT>(
     number_layers: usize,
     p_0: Polynomial<FieldElement<E>>,
     transcript: &mut impl IsTranscript<E>,
@@ -31,7 +33,7 @@ pub fn commit_phase<F: IsFFTField + IsSubFieldOf<E>, E: IsField>(
 )
 where
     FieldElement<F>: AsBytes + Sync + Send,
-    FieldElement<E>: AsBytes + Sync + Send,
+    FieldElement<E>: AsBytes + Sync + Send + ByteConversion,
 {
     let mut domain_size = domain_size;
 
@@ -112,14 +114,14 @@ where
     }
 }
 
-pub fn new_fri_layer<F: IsFFTField + IsSubFieldOf<E>, E: IsField>(
+pub fn new_fri_layer<F: IsFFTField + IsSubFieldOf<E>, E: IsField + IsFFTField + IcicleFFT>(
     poly: &Polynomial<FieldElement<E>>,
     coset_offset: &FieldElement<F>,
     domain_size: usize,
 ) -> crate::fri::fri_commitment::FriLayer<E, BatchedMerkleTreeBackend<E>>
 where
     FieldElement<F>: AsBytes + Sync + Send,
-    FieldElement<E>: AsBytes + Sync + Send,
+    FieldElement<E>: AsBytes + Sync + Send + ByteConversion,
 {
     let mut evaluation =
         Polynomial::evaluate_offset_fft(poly, 1, Some(domain_size), coset_offset).unwrap(); // TODO: return error

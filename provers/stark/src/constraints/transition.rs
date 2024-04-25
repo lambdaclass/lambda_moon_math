@@ -4,7 +4,9 @@ use crate::prover::evaluate_polynomial_on_lde_domain;
 use itertools::Itertools;
 use lambdaworks_math::field::element::FieldElement;
 use lambdaworks_math::field::traits::{IsFFTField, IsField, IsSubFieldOf};
+use lambdaworks_math::gpu::icicle::IcicleFFT;
 use lambdaworks_math::polynomial::Polynomial;
+use lambdaworks_math::traits::ByteConversion;
 use num_integer::Integer;
 use std::ops::Div;
 /// TransitionConstraint represents the behaviour that a transition constraint
@@ -105,7 +107,11 @@ where
     }
 
     /// Compute evaluations of the constraints zerofier over a LDE domain.
-    fn zerofier_evaluations_on_extended_domain(&self, domain: &Domain<F>) -> Vec<FieldElement<F>> {
+    fn zerofier_evaluations_on_extended_domain(&self, domain: &Domain<F>) -> Vec<FieldElement<F>>
+    where
+        F: IcicleFFT,
+        FieldElement<F>: ByteConversion,
+    {
         let blowup_factor = domain.blowup_factor;
         let trace_length = domain.trace_roots_of_unity.len();
         let trace_primitive_root = &domain.trace_primitive_root;

@@ -11,7 +11,11 @@ use crate::{
     trace::TraceTable,
     traits::AIR,
 };
-use lambdaworks_math::field::{element::FieldElement, traits::IsFFTField};
+use lambdaworks_math::{
+    field::{element::FieldElement, traits::IsFFTField},
+    gpu::icicle::IcicleFFT,
+    traits::ByteConversion,
+};
 
 pub struct PeriodicConstraint<F: IsFFTField> {
     phantom: PhantomData<F>,
@@ -31,7 +35,8 @@ impl<F: IsFFTField> Default for PeriodicConstraint<F> {
 
 impl<F> TransitionConstraint<F, F> for PeriodicConstraint<F>
 where
-    F: IsFFTField + Send + Sync,
+    F: IsFFTField + Send + Sync + IcicleFFT,
+    FieldElement<F>: ByteConversion,
 {
     fn degree(&self) -> usize {
         1
@@ -101,7 +106,8 @@ where
 
 impl<F> AIR for SimplePeriodicAIR<F>
 where
-    F: IsFFTField + Send + Sync + 'static,
+    F: IsFFTField + Send + Sync + 'static + IcicleFFT,
+    FieldElement<F>: ByteConversion,
 {
     type Field = F;
     type FieldExtension = F;

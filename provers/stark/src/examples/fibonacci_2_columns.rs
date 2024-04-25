@@ -12,7 +12,11 @@ use crate::{
     trace::TraceTable,
     traits::AIR,
 };
-use lambdaworks_math::field::{element::FieldElement, traits::IsFFTField};
+use lambdaworks_math::{
+    field::{element::FieldElement, traits::IsFFTField},
+    gpu::icicle::IcicleFFT,
+    traits::ByteConversion,
+};
 
 #[derive(Clone)]
 struct FibTransition1<F: IsFFTField> {
@@ -29,7 +33,8 @@ impl<F: IsFFTField> FibTransition1<F> {
 
 impl<F> TransitionConstraint<F, F> for FibTransition1<F>
 where
-    F: IsFFTField + Send + Sync,
+    F: IsFFTField + Send + Sync + IcicleFFT,
+    FieldElement<F>: ByteConversion,
 {
     fn degree(&self) -> usize {
         1
@@ -79,7 +84,8 @@ impl<F: IsFFTField> FibTransition2<F> {
 
 impl<F> TransitionConstraint<F, F> for FibTransition2<F>
 where
-    F: IsFFTField + Send + Sync,
+    F: IsFFTField + Send + Sync + IcicleFFT,
+    FieldElement<F>: ByteConversion,
 {
     fn degree(&self) -> usize {
         1
@@ -128,7 +134,8 @@ where
 /// stacked in row-major order.
 impl<F> AIR for Fibonacci2ColsAIR<F>
 where
-    F: IsFFTField + Send + Sync + 'static,
+    F: IsFFTField + Send + Sync + 'static + IcicleFFT,
+    FieldElement<F>: ByteConversion,
 {
     type Field = F;
     type FieldExtension = F;

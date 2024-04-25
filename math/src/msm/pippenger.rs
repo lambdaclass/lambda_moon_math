@@ -1,7 +1,14 @@
-use crate::{cyclic_group::IsGroup, unsigned_integer::element::UnsignedInteger};
+use crate::{
+    cyclic_group::IsGroup,
+    field::{element::FieldElement, traits::IsField},
+    unsigned_integer::element::UnsignedInteger,
+    gpu::icicle::GpuMSMPoint
+};
 
 use super::naive::MSMError;
-
+#[cfg(feature = "icicle")]
+use crate::gpu::icicle::icicle_msm;
+use crate::traits::ByteConversion;
 use alloc::vec;
 
 /// This function computes the multiscalar multiplication (MSM).
@@ -15,20 +22,39 @@ use alloc::vec;
 /// If `points` and `cs` are empty, then `msm` returns the zero element of the group.
 ///
 /// Panics if `cs` and `points` have different lengths.
-pub fn msm<const NUM_LIMBS: usize, G>(
-    cs: &[UnsignedInteger<NUM_LIMBS>],
+pub fn msm<const NUM_LIMBS: usize, F: IsField<BaseType = UnsignedInteger<NUM_LIMBS>>, G>(
+    cs: &[FieldElement<F>],
     points: &[G],
 ) -> Result<G, MSMError>
 where
-    G: IsGroup,
+    G: IsGroup + GpuMSMPoint,
+    FieldElement<F>: ByteConversion,
 {
     if cs.len() != points.len() {
         return Err(MSMError::LengthMismatch(cs.len(), points.len()));
     }
 
-    let window_size = optimum_window_size(cs.len());
+    #[cfg(feature = "icicle")]
+    {
+        if !G::curve_name().is_empty() {
+            icicle_msm(cs, points)
+        } else {
+            println!(
+                "Icicle msm failed for field {}. Program will fallback to CPU.",
+                core::any::type_name::<F>()
+            );
+            let window_size = optimum_window_size(cs.len());
+            let cs = cs.iter().map(|cs| *cs.value()).collect::<Vec<_>>();
+            Ok(msm_with(&cs, points, window_size))
+        }
+    }
 
-    Ok(msm_with(cs, points, window_size))
+    #[cfg(not(feature = "icicle"))]
+    {
+        let window_size = optimum_window_size(cs.len());
+        let cs = cs.iter().map(|cs| *cs.value()).collect::<Vec<_>>();
+        Ok(msm_with(&cs, points, window_size))
+    }
 }
 
 fn optimum_window_size(data_length: usize) -> usize {

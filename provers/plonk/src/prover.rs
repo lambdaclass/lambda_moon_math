@@ -15,6 +15,9 @@ use lambdaworks_math::{
 };
 use lambdaworks_math::{field::traits::IsField, traits::ByteConversion};
 
+//TODO: feature gate
+use lambdaworks_math::gpu::icicle::IcicleFFT;
+
 /// Plonk proof.
 /// The challenges are denoted
 ///     Round 2: β,γ,
@@ -279,7 +282,7 @@ struct Round5Result<F: IsField, Hiding> {
 
 impl<F, CS, R> Prover<F, CS, R>
 where
-    F: IsField + IsFFTField,
+    F: IsField + IsFFTField + IcicleFFT,
     CS: IsCommitmentScheme<F>,
     FieldElement<F>: ByteConversion,
     CS::Commitment: AsBytes,

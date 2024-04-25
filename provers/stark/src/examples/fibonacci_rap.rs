@@ -14,6 +14,7 @@ use crate::{
 use lambdaworks_crypto::fiat_shamir::is_transcript::IsTranscript;
 use lambdaworks_math::{
     field::{element::FieldElement, traits::IsFFTField},
+    gpu::icicle::IcicleFFT,
     helpers::resize_to_next_power_of_two,
     traits::ByteConversion,
 };
@@ -33,7 +34,8 @@ impl<F: IsFFTField> FibConstraint<F> {
 
 impl<F> TransitionConstraint<F, F> for FibConstraint<F>
 where
-    F: IsFFTField + Send + Sync,
+    F: IsFFTField + Send + Sync + IcicleFFT,
+    FieldElement<F>: ByteConversion,
 {
     fn degree(&self) -> usize {
         1
@@ -85,7 +87,8 @@ impl<F: IsFFTField> PermutationConstraint<F> {
 
 impl<F> TransitionConstraint<F, F> for PermutationConstraint<F>
 where
-    F: IsFFTField + Send + Sync,
+    F: IsFFTField + Send + Sync + IcicleFFT,
+    FieldElement<F>: ByteConversion,
 {
     fn degree(&self) -> usize {
         2
@@ -145,7 +148,7 @@ where
 
 impl<F> AIR for FibonacciRAP<F>
 where
-    F: IsFFTField + Send + Sync + 'static,
+    F: IsFFTField + Send + Sync + 'static + IcicleFFT,
     FieldElement<F>: ByteConversion,
 {
     type Field = F;
