@@ -7,6 +7,7 @@ use crate::{
         traits::{IsFFTField, RootsConfig},
     },
     polynomial::Polynomial,
+    traits::ByteConversion,
 };
 use alloc::{vec, vec::Vec};
 
@@ -14,6 +15,13 @@ use alloc::{vec, vec::Vec};
 use crate::fft::gpu::cuda::polynomial::{evaluate_fft_cuda, interpolate_fft_cuda};
 #[cfg(feature = "metal")]
 use crate::fft::gpu::metal::polynomial::{evaluate_fft_metal, interpolate_fft_metal};
+#[cfg(feature = "icicle")]
+use crate::gpu::icicle::{evaluate_fft_icicle, IcicleFFT};
+#[cfg(feature = "icicle")]
+use icicle_core::{
+    ntt::NTT,
+    traits::FieldImpl,
+};
 
 use super::cpu::{ops, roots_of_unity};
 
@@ -26,7 +34,8 @@ impl<E: IsField> Polynomial<FieldElement<E>> {
         poly: &Polynomial<FieldElement<E>>,
         blowup_factor: usize,
         domain_size: Option<usize>,
-    ) -> Result<Vec<FieldElement<E>>, FFTError> {
+    ) -> Result<Vec<FieldElement<E>>, FFTError> 
+    {
         let domain_size = domain_size.unwrap_or(0);
         let len = core::cmp::max(poly.coeff_len(), domain_size).next_power_of_two() * blowup_factor;
 
@@ -50,6 +59,21 @@ impl<E: IsField> Polynomial<FieldElement<E>> {
                 evaluate_fft_cpu::<F, E>(&coeffs)
             }
         }
+
+        /*
+        #[cfg(feature = "icicle")]
+        {
+            if !F::field_name().is_empty() {
+                Ok(evaluate_fft_icicle::<F, E>(&coeffs)?)
+            } else {
+                println!(
+                    "GPU evaluation failed for field {}. Program will fallback to CPU.",
+                    core::any::type_name::<F>()
+                );
+                evaluate_fft_cpu::<F, E>(&coeffs)
+            }
+        }
+        */
 
         #[cfg(feature = "cuda")]
         {
@@ -134,6 +158,7 @@ pub fn compose_fft<F, E>(
 where
     F: IsFFTField + IsSubFieldOf<E>,
     E: IsField,
+    FieldElement<F>: ByteConversion
 {
     let poly_2_evaluations = Polynomial::evaluate_fft::<F>(poly_2, 1, None).unwrap();
 

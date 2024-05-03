@@ -5,6 +5,8 @@ use crate::{
     elliptic_curve::short_weierstrass::traits::IsShortWeierstrass, field::element::FieldElement,
 };
 
+pub type BLS12377FieldElement = FieldElement<BLS12377PrimeField>;
+
 /// The description of the curve.
 #[derive(Clone, Debug)]
 pub struct BLS12377Curve;

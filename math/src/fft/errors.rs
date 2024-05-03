@@ -8,6 +8,9 @@ use lambdaworks_gpu::metal::abstractions::errors::MetalError;
 #[cfg(feature = "cuda")]
 use lambdaworks_gpu::cuda::abstractions::errors::CudaError;
 
+#[cfg(feature = "icicle")]
+use icicle_core::error::IcicleError;
+
 #[derive(Debug)]
 pub enum FFTError {
     RootOfUnityError(u64),
@@ -17,6 +20,8 @@ pub enum FFTError {
     MetalError(MetalError),
     #[cfg(feature = "cuda")]
     CudaError(CudaError),
+    #[cfg(feature = "icicle")]
+    IcicleError(IcicleError),
 }
 
 impl Display for FFTError {
@@ -37,6 +42,8 @@ impl Display for FFTError {
             FFTError::CudaError(_) => {
                 write!(f, "A CUDA related error has ocurred")
             }
+            #[cfg(feature = "icicle")]
+            FFTError::IcicleError(e) => write!(f, "Icicle GPU backend failure. {:?}", e),
         }
     }
 }
