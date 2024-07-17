@@ -16,6 +16,7 @@ num-traits = "0.2"
 ibig = "0.3.6"
 p3-goldilocks = { git = "https://github.com/Plonky3/Plonky3", rev = "41cd843" }
 p3-mersenne-31 = { git = "https://github.com/Plonky3/Plonky3", rev = "41cd843" }
+p3-field = { git = "https://github.com/Plonky3/Plonky3", rev = "41cd843" }
 
 [[bin]]
 name = "curve_bls12_381"
@@ -42,7 +43,7 @@ test = false
 doc = false
 
 [[bin]]
-name = "field_fuzz_mersenne31"
+name = "field_mersenne31"
 path = "fuzz_targets/field/mersenne31.rs"
 test = false
 doc = false
