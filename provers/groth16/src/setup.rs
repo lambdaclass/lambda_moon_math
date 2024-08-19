@@ -2,8 +2,9 @@ use crate::{common::*, QuadraticArithmeticProgram};
 use lambdaworks_math::{
     cyclic_group::IsGroup,
     elliptic_curve::{
-        short_weierstrass::{point::ShortWeierstrassProjectivePoint, traits::IsShortWeierstrass},
+        short_weierstrass::curves::bls12_381::{curve::BLS12381Curve, twist::BLS12381TwistCurve},
         traits::{IsEllipticCurve, IsPairing},
+        wnaf::WnafTable,
     },
 };
 
@@ -92,6 +93,29 @@ pub fn setup(qap: &QuadraticArithmeticProgram) -> (ProvingKey, VerifyingKey) {
 
     let delta_g2 = g2.operate_with_self(tw.delta.representative());
 
+    let z_powers_of_tau = &core::iter::successors(
+        // Start from delta^{-1} * t(τ)
+        // Note that t(τ) = (τ^N - 1) because our domain is roots of unity
+        Some(&delta_inv * (&tw.tau.pow(qap.num_of_gates) - FrElement::one())),
+        |prev| Some(prev * &tw.tau),
+    )
+    .take(qap.num_of_gates * 2)
+    .collect::<Vec<_>>();
+
+    let g1_wnaf = WnafTable::<BLS12381Curve, FrField>::new(
+        &g1,
+        *[
+            qap.num_of_public_inputs,
+            r_tau.len(),
+            l_tau.len(),
+            k_tau.len() - qap.num_of_public_inputs,
+            z_powers_of_tau.len(),
+        ]
+        .iter()
+        .max()
+        .unwrap(),
+    );
+
     (
         ProvingKey {
             alpha_g1,
@@ -99,37 +123,18 @@ pub fn setup(qap: &QuadraticArithmeticProgram) -> (ProvingKey, VerifyingKey) {
             beta_g2,
             delta_g1: g1.operate_with_self(tw.delta.representative()),
             delta_g2: delta_g2.clone(),
-            l_tau_g1: batch_operate(&l_tau, &g1),
-            r_tau_g1: batch_operate(&r_tau, &g1),
-            r_tau_g2: batch_operate(&r_tau, &g2),
-            prover_k_tau_g1: batch_operate(&k_tau[qap.num_of_public_inputs..], &g1),
-            z_powers_of_tau_g1: batch_operate(
-                &core::iter::successors(
-                    // Start from delta^{-1} * t(τ)
-                    // Note that t(τ) = (τ^N - 1) because our domain is roots of unity
-                    Some(&delta_inv * (&tw.tau.pow(qap.num_of_gates) - FrElement::one())),
-                    |prev| Some(prev * &tw.tau),
-                )
-                .take(qap.num_of_gates * 2)
-                .collect::<Vec<_>>(),
-                &g1,
-            ),
+            l_tau_g1: g1_wnaf.multi_scalar_mul(&l_tau),
+            r_tau_g1: g1_wnaf.multi_scalar_mul(&r_tau),
+            r_tau_g2: WnafTable::<BLS12381TwistCurve, FrField>::new(&g2, r_tau.len())
+                .multi_scalar_mul(&r_tau),
+            prover_k_tau_g1: g1_wnaf.multi_scalar_mul(&k_tau[qap.num_of_public_inputs..]),
+            z_powers_of_tau_g1: g1_wnaf.multi_scalar_mul(z_powers_of_tau),
         },
         VerifyingKey {
             alpha_g1_times_beta_g2,
             delta_g2,
             gamma_g2: g2.operate_with_self(tw.gamma.representative()),
-            verifier_k_tau_g1: batch_operate(&k_tau[..qap.num_of_public_inputs], &g1),
+            verifier_k_tau_g1: g1_wnaf.multi_scalar_mul(&k_tau[..qap.num_of_public_inputs]),
         },
     )
-}
-
-fn batch_operate<E: IsShortWeierstrass>(
-    elems: &[FrElement],
-    point: &ShortWeierstrassProjectivePoint<E>,
-) -> Vec<ShortWeierstrassProjectivePoint<E>> {
-    elems
-        .iter()
-        .map(|elem| point.operate_with_self(elem.representative()))
-        .collect()
 }

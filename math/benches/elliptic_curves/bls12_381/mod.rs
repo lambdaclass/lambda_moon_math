@@ -1,3 +1,5 @@
+pub mod wnaf;
+
 use criterion::{black_box, Criterion};
 use lambdaworks_math::{
     cyclic_group::IsGroup,

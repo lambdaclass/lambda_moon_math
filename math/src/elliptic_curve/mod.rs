@@ -4,3 +4,4 @@ pub mod montgomery;
 pub mod point;
 pub mod short_weierstrass;
 pub mod traits;
+pub mod wnaf;
