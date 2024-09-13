@@ -10,5 +10,6 @@ name = "stark-101"
 path = "src/main.rs"
 
 [dependencies]
+hex = "0.4.3"
 lambdaworks-crypto = { workspace = true }
 lambdaworks-math = { workspace = true }
