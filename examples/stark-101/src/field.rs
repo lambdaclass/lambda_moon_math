@@ -1,10 +1,4 @@
-use lambdaworks_math::{
-    field::{
-        element::FieldElement,
-        fields::montgomery_backed_prime_fields::{IsModulus, U64PrimeField},
-    },
-    unsigned_integer::element::U64,
-};
+use lambdaworks_math::{field::fields::montgomery_backed_prime_fields::{IsModulus, U64PrimeField}, unsigned_integer::element::U64};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MontgomeryConfigU64Stark101Field;
