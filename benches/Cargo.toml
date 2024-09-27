@@ -13,6 +13,7 @@ starknet-curve = { git = "https://github.com/xJonathanLEI/starknet-rs", tag = "s
 starknet-ff = { git = "https://github.com/xJonathanLEI/starknet-rs", tag = "starknet-ff/v0.3.7" }
 starknet-crypto = { git = "https://github.com/xJonathanLEI/starknet-rs", tag = "starknet-crypto/v0.6.2" }
 pathfinder-crypto = { git = "https://github.com/eqlabs/pathfinder.git" }
+p3-mersenne-31 = { git = "https://github.com/Plonky3/Plonky3.git" }
 
 [dependencies.lambdaworks-math]
 path = "../math"
@@ -54,4 +55,8 @@ harness = false
 
 [[bench]]
 name = "poseidon"
+harness = false
+
+[[bench]]
+name = "mersenne31"
 harness = false
