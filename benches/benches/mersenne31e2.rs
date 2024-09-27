@@ -1,31 +1,40 @@
 use std::time::Duration;
 
-use lambdaworks_math::field::{element::FieldElement, fields::mersenne31::field::Mersenne31Field};
+use lambdaworks_math::field::{element::FieldElement, fields::mersenne31::{extension::Degree2ExtensionField, field::Mersenne31Field}};
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use p3_mersenne_31::Mersenne31;
+use p3_field::extension::Complex;
+
 use rand::random;
 
 pub mod utils;
 
-pub type F = FieldElement<Mersenne31Field>;
+pub type Fp = FieldElement<Mersenne31Field>;
+pub type Fp2 = FieldElement<Degree2ExtensionField>;
 
-const BENCHMARK_NAME: &str = "Mersenne 31";
 
-fn create_random_lambdaworks_vector(num: usize) -> Vec<(F, F)> {
+const BENCHMARK_NAME: &str = "Mersenne 31 Degree 2 extension";
+
+fn create_random_lambdaworks_vector(num: usize) -> Vec<(Fp2, Fp2)> {
     let mut result = Vec::with_capacity(num);
     for _ in 0..result.capacity() {
-        result.push((F::new(random()), F::new(random())));
+        result.push((Fp2::new([Fp::new(random()), Fp::new(random())]), Fp2::new([Fp::new(random()), Fp::new(random())])));
     }
     result
 }
 
-fn to_plonk3_vec(lambdaworks_vec: &Vec<(F, F)>) -> Vec<(Mersenne31, Mersenne31)> {
+fn to_plonk3_vec(lambdaworks_vec: &Vec<(Fp2, Fp2)>) -> Vec<(Complex<Mersenne31>, Complex<Mersenne31>)> {
     let mut p3_vec = Vec::with_capacity(lambdaworks_vec.len());
     for lambdaworks_pair in lambdaworks_vec {
-        let a: Mersenne31 = Mersenne31::new(*lambdaworks_pair.0.value());
-        let b: Mersenne31 = Mersenne31::new(*lambdaworks_pair.1.value());
-
+        let a: Complex<Mersenne31> = Complex::<Mersenne31>::new(
+            Mersenne31::new(*lambdaworks_pair.0.value()[0].value()),
+            Mersenne31::new(*lambdaworks_pair.0.value()[1].value())
+        );
+        let b: Complex<Mersenne31> = Complex::<Mersenne31>::new(
+            Mersenne31::new(*lambdaworks_pair.1.value()[0].value()),
+            Mersenne31::new(*lambdaworks_pair.1.value()[1].value())
+        );
         p3_vec.push((a, b));
     }
     p3_vec
@@ -46,7 +55,7 @@ fn criterion_benchmark(c: &mut Criterion) {
 
                     for _i in 0..1000000 {
                         let a = iter.next().unwrap();
-                        black_box(black_box(a.0) + (black_box(a.1)));
+                        black_box(black_box(a.0.clone()) + (black_box(a.1.clone())));
                     }
                 });
             },
@@ -62,7 +71,7 @@ fn criterion_benchmark(c: &mut Criterion) {
 
                     for _i in 0..1000000 {
                         let a = iter.next().unwrap();
-                        black_box(black_box(a.0) + (black_box(a.1)));
+                        black_box(black_box(a.0.clone()) + (black_box(a.1.clone())));
                     }
                 });
             },
@@ -78,7 +87,7 @@ fn criterion_benchmark(c: &mut Criterion) {
 
                     for _i in 0..1000000 {
                         let a = iter.next().unwrap();
-                        black_box(black_box(a.0) * (black_box(a.1)));
+                        black_box(black_box(a.0.clone()) * (black_box(a.1.clone())));
                     }
                 });
             },
@@ -94,7 +103,7 @@ fn criterion_benchmark(c: &mut Criterion) {
 
                     for _i in 0..1000000 {
                         let a = iter.next().unwrap();
-                        black_box(black_box(a.0) * (black_box(a.1)));
+                        black_box(black_box(a.0.clone()) * (black_box(a.1.clone())));
                     }
                 });
             },
@@ -110,7 +119,7 @@ fn criterion_benchmark(c: &mut Criterion) {
 
                     for _i in 0..1000000 {
                         let a = iter.next().unwrap();
-                        black_box(black_box(a.0) / (black_box(a.1)));
+                        black_box(black_box(a.0.clone()) / (black_box(a.1.clone())));
                     }
                 });
             },
@@ -126,7 +135,7 @@ fn criterion_benchmark(c: &mut Criterion) {
 
                     for _i in 0..1000000 {
                         let a = iter.next().unwrap();
-                        black_box(black_box(a.0) / (black_box(a.1)));
+                        black_box(black_box(a.0.clone()) / (black_box(a.1.clone())));
                     }
                 });
             },
