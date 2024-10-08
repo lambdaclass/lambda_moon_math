@@ -1,15 +1,18 @@
-use crate::field::{
-    element::FieldElement,
-    errors::FieldError,
-    extensions::{
-        cubic::{CubicExtensionField, HasCubicNonResidue},
-        quadratic::{HasQuadraticNonResidue, QuadraticExtensionField},
-    },
-    fields::montgomery_backed_prime_fields::{IsModulus, MontgomeryBackendPrimeField},
-    traits::{IsField, IsSubFieldOf},
-};
 use crate::traits::ByteConversion;
 use crate::unsigned_integer::element::U384;
+use crate::{
+    errors::ByteConversionError,
+    field::{
+        element::FieldElement,
+        errors::FieldError,
+        extensions::{
+            cubic::{CubicExtensionField, HasCubicNonResidue},
+            quadratic::{HasQuadraticNonResidue, QuadraticExtensionField},
+        },
+        fields::montgomery_backed_prime_fields::{IsModulus, MontgomeryBackendPrimeField},
+        traits::{IsField, IsSubFieldOf},
+    },
+};
 
 pub const BLS12381_PRIME_FIELD_ORDER: U384 = U384::from_hex_unchecked("1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab");
 
@@ -187,7 +190,78 @@ impl ByteConversion for FieldElement<Degree2ExtensionField> {
         Ok(Self::new([x0, x1]))
     }
 }
+/* impl ByteConversion for FieldElement<Degree2ExtensionField> {
+    #[cfg(feature = "alloc")]
+    fn to_bytes_be(&self) -> alloc::vec::Vec<u8> {
+        let mut byte_slice = self.value()[0].to_bytes_be();
+        byte_slice.extend(self.value()[1].to_bytes_be());
+        byte_slice
+    }
 
+    #[cfg(feature = "alloc")]
+    fn to_bytes_le(&self) -> alloc::vec::Vec<u8> {
+        let mut byte_slice = self.value()[0].to_bytes_le();
+        byte_slice.extend(self.value()[1].to_bytes_le());
+        byte_slice
+    }
+
+    fn from_bytes_be(bytes: &[u8]) -> Result<Self, ByteConversionError>
+    where
+        Self: Sized,
+    {
+        let field_element_size = bytes.len() / 2;
+        let x0 = FieldElement::<BLS12381PrimeField>::from_bytes_be(&bytes[..field_element_size])?;
+        let x1 = FieldElement::<BLS12381PrimeField>::from_bytes_be(&bytes[field_element_size..])?;
+        Ok(Self::new([x0, x1]))
+    }
+
+    fn from_bytes_le(bytes: &[u8]) -> Result<Self, ByteConversionError>
+    where
+        Self: Sized,
+    {
+        let field_element_size = bytes.len() / 2;
+        let x0 = FieldElement::<BLS12381PrimeField>::from_bytes_le(&bytes[..field_element_size])?;
+        let x1 = FieldElement::<BLS12381PrimeField>::from_bytes_le(&bytes[field_element_size..])?;
+        Ok(Self::new([x0, x1]))
+    }
+}
+*/
+
+impl ByteConversion for [FieldElement<BLS12381PrimeField>; 2] {
+    #[cfg(feature = "alloc")]
+    fn to_bytes_be(&self) -> alloc::vec::Vec<u8> {
+        let mut bytes = self[0].to_bytes_be();
+        bytes.extend(self[1].to_bytes_be());
+        bytes
+    }
+
+    #[cfg(feature = "alloc")]
+    fn to_bytes_le(&self) -> alloc::vec::Vec<u8> {
+        let mut bytes = self[0].to_bytes_le();
+        bytes.extend(self[1].to_bytes_le());
+        bytes
+    }
+
+    fn from_bytes_be(bytes: &[u8]) -> Result<Self, ByteConversionError>
+    where
+        Self: Sized,
+    {
+        let field_element_size = bytes.len() / 2;
+        let a0 = FieldElement::<BLS12381PrimeField>::from_bytes_be(&bytes[..field_element_size])?;
+        let a1 = FieldElement::<BLS12381PrimeField>::from_bytes_be(&bytes[field_element_size..])?;
+        Ok([a0, a1])
+    }
+
+    fn from_bytes_le(bytes: &[u8]) -> Result<Self, ByteConversionError>
+    where
+        Self: Sized,
+    {
+        let field_element_size = bytes.len() / 2;
+        let a0 = FieldElement::<BLS12381PrimeField>::from_bytes_le(&bytes[..field_element_size])?;
+        let a1 = FieldElement::<BLS12381PrimeField>::from_bytes_le(&bytes[field_element_size..])?;
+        Ok([a0, a1])
+    }
+}
 ///////////////
 #[derive(Debug, Clone)]
 pub struct LevelTwoResidue;
@@ -208,6 +282,7 @@ impl HasQuadraticNonResidue<Degree2ExtensionField> for LevelTwoResidue {
         ])
     }
 }
+
 pub type Degree4ExtensionField = QuadraticExtensionField<Degree2ExtensionField, LevelTwoResidue>;
 
 pub type Degree6ExtensionField = CubicExtensionField<Degree2ExtensionField, LevelTwoResidue>;

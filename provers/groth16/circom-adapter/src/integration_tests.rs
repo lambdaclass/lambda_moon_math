@@ -1,4 +1,8 @@
-use std::fs;
+use bincode;
+use std::{
+    fs::{self, File},
+    io::{Read, Write},
+};
 
 use crate::*;
 use lambdaworks_groth16::*;
@@ -101,4 +105,62 @@ fn vitalik_w_and_qap() {
     assert_eq!(qap.l, expected_l);
     assert_eq!(qap.r, expected_r);
     assert_eq!(qap.o, expected_o);
+}
+
+#[test]
+fn fibonacci_prove_verify() {
+    let test_dir = "test_files/fibonacci";
+    let proof_file_path = format!("{}/proof.bin", test_dir);
+    let vk_file_path = format!("{}/verifying_key.bin", test_dir);
+
+    let (qap, w) = circom_to_lambda(
+        &fs::read_to_string(format!("{test_dir}/fibonacci.r1cs.json"))
+            .expect("Error reading the file"),
+        &fs::read_to_string(format!("{test_dir}/witness.json")).expect("Error reading the file"),
+    );
+
+    let (pk, vk) = setup(&qap);
+    let serialized_vk = bincode::serialize(&vk).expect("Failed to serialize vk");
+    let mut vk_file = File::create(&vk_file_path).expect("Unable to create vk file");
+    vk_file
+        .write_all(&serialized_vk)
+        .expect("Unable to write vk to file");
+    println!("Serialized verifying key written to: {}", vk_file_path);
+    /*
+        let proof = Prover::prove(&w, &qap, &pk);
+        // Start serialization of the proof to binary and save it to a file
+        let serialized_proof = proof.serialize();
+        let proof_file_path = format!("{test_dir}/proof.bin");
+        let mut proof_file = File::create(&proof_file_path).expect("Unable to create proof file");
+        proof_file
+            .write_all(&serialized_proof)
+            .expect("Unable to write proof to file");
+        println!("Serialized proof written to: {}", proof_file_path);
+    */
+
+    // Once the proof is serialized, we can deserialize it back to a proof object
+
+    // println!("vk: {:?}", vk);
+
+    let mut file = File::open(&proof_file_path).expect("Unable to open proof file");
+    let mut serialized_proof = Vec::new();
+    file.read_to_end(&mut serialized_proof)
+        .expect("Unable to read proof file");
+    let deserialized_proof =
+        Proof::deserialize(&serialized_proof).expect("Failed to deserialize proof");
+
+    let accept = verify(
+        &vk,
+        &Prover::prove(&w, &qap, &pk),
+        &w[..qap.num_of_public_inputs],
+    );
+    //println!(
+    //    "&w[..qap.num_of_public_inputs]: {:?}",
+    //    &w[..qap.num_of_public_inputs]
+    // );
+    //println!("w: {:?}", w);
+
+    // println!("vk: {:?}", vk);
+    // println!("proof: {:?}", deserialized_proof);
+    assert!(accept);
 }

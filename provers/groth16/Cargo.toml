@@ -8,9 +8,13 @@ repository.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-lambdaworks-math.workspace = true
+lambdaworks-math = { workspace = true, features = [
+    "std",
+    "lambdaworks-serde-binary",
+] }
 lambdaworks-crypto.workspace = true
 rand_chacha = "0.3.1"
-serde = "1.0"
+serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 rand = "0.8.5"
+bincode = "1.3"

@@ -5,19 +5,68 @@ use lambdaworks_math::{
         short_weierstrass::{point::ShortWeierstrassProjectivePoint, traits::IsShortWeierstrass},
         traits::{IsEllipticCurve, IsPairing},
     },
+    field::traits::IsField,
+    traits::AsBytes,
 };
+use serde::ser::Serializer;
+use serde::{Deserialize, Serialize};
 
-pub struct VerifyingKey {
-    // e([alpha]_1, [beta]_2) computed during setup as it's a constant
-    pub alpha_g1_times_beta_g2: PairingOutput,
-    pub delta_g2: G2Point,
-    pub gamma_g2: G2Point,
-    // [K_0(τ)]_1, [K_1(τ)]_1, ..., [K_k(τ)]_1
-    // where K_i(τ) = γ^{-1} * (β*l(τ) + α*r(τ) + o(τ))
-    // and "k" is the number of public inputs
-    pub verifier_k_tau_g1: Vec<G1Point>,
+/// Wrapper para G1Point que permite implementar Serialize
+#[derive(Debug)]
+
+pub struct SerializableG1Point(pub G1Point);
+
+impl Serialize for SerializableG1Point {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        // Suponiendo que G1Point tiene un método `to_bytes()`
+        let bytes = self.0.as_bytes();
+        serializer.serialize_bytes(&bytes)
+    }
 }
 
+/// Wrapper para G2Point que permite implementar Serialize
+#[derive(Debug)]
+pub struct SerializableG2Point(pub G2Point);
+
+impl Serialize for SerializableG2Point {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let bytes = self.0.as_bytes();
+        serializer.serialize_bytes(&bytes)
+    }
+}
+
+/// Wrapper para PairingOutput que permite implementar Serialize
+#[derive(Debug)]
+pub struct SerializablePairingOutput(pub PairingOutput);
+
+impl Serialize for SerializablePairingOutput {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        // Assuming that FieldElement implements AsBytes
+        self.0.serialize(serializer)
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct VerifyingKey {
+    /// e([alpha]_1, [beta]_2) calculado durante el setup
+    pub alpha_g1_times_beta_g2: SerializablePairingOutput,
+    pub delta_g2: SerializableG2Point,
+    pub gamma_g2: SerializableG2Point,
+    /// [K_0(τ)]_1, [K_1(τ)]_1, ..., [K_k(τ)]_1
+    /// donde K_i(τ) = γ^{-1} * (β*l(τ) + α*r(τ) + o(τ))
+    /// y "k" es el número de entradas públicas
+    pub verifier_k_tau_g1: Vec<SerializableG1Point>,
+}
+#[derive(Debug)] // needed?
 pub struct ProvingKey {
     pub alpha_g1: G1Point,
     pub beta_g1: G1Point,
@@ -116,10 +165,13 @@ pub fn setup(qap: &QuadraticArithmeticProgram) -> (ProvingKey, VerifyingKey) {
             ),
         },
         VerifyingKey {
-            alpha_g1_times_beta_g2,
-            delta_g2,
-            gamma_g2: g2.operate_with_self(tw.gamma.representative()),
-            verifier_k_tau_g1: batch_operate(&k_tau[..qap.num_of_public_inputs], &g1),
+            alpha_g1_times_beta_g2: SerializablePairingOutput(alpha_g1_times_beta_g2),
+            delta_g2: SerializableG2Point(delta_g2),
+            gamma_g2: SerializableG2Point(g2.operate_with_self(tw.gamma.representative())),
+            verifier_k_tau_g1: batch_operate(&k_tau[..qap.num_of_public_inputs], &g1)
+                .into_iter()
+                .map(SerializableG1Point)
+                .collect(),
         },
     )
 }

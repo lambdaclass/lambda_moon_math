@@ -59,3 +59,4 @@ pub trait Deserializable {
 pub trait IsRandomFieldElementGenerator<F: IsField> {
     fn generate(&self) -> FieldElement<F>;
 }
+

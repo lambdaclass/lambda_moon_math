@@ -5,6 +5,7 @@ pub enum ByteConversionError {
     InvalidValue,
     PointNotInSubgroup,
     ValueNotCompressed,
+    InvalidLength,
 }
 
 #[derive(Debug, PartialEq, Eq)]

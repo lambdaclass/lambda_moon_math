@@ -151,7 +151,7 @@ impl IsSubFieldOf<Degree2ExtensionField> for BLS12377PrimeField {
         b.into_iter().map(|x| x.to_raw()).collect()
     }
 }
-
+/*
 impl ByteConversion for FieldElement<Degree2ExtensionField> {
     #[cfg(feature = "alloc")]
     fn to_bytes_be(&self) -> alloc::vec::Vec<u8> {
@@ -187,7 +187,7 @@ impl ByteConversion for FieldElement<Degree2ExtensionField> {
         Ok(Self::new([x0, x1]))
     }
 }
-
+*/
 impl FieldElement<Degree2ExtensionField> {
     pub fn new_base(a_hex: &str) -> Self {
         Self::new([FieldElement::new(U384::from(a_hex)), FieldElement::zero()])

@@ -4,6 +4,7 @@ use lambdaworks_math::traits::{AsBytes, Deserializable};
 use lambdaworks_math::{cyclic_group::IsGroup, msm::pippenger::msm};
 use std::mem::size_of;
 
+#[derive(Debug)]
 pub struct Proof {
     pub pi1: G1Point,
     pub pi2: G2Point,
