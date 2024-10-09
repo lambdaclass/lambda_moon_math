@@ -50,6 +50,15 @@ where
         self.len
     }
 
+    pub fn fix_variable(&mut self, r: &FieldElement<F>) {
+        let n = self.len() / 2;
+        for i in 0..n {
+            self.evals[i] = &self.evals[i] + r * (&self.evals[i + n] - &self.evals[i]);
+        }
+        self.n_vars -= 1;
+        self.len = n;
+    }
+
     /// Evaluates `self` at the point `p` in O(n) time.
     pub fn evaluate(&self, r: Vec<FieldElement<F>>) -> Result<FieldElement<F>, MultilinearError> {
         // r must have a value for each variable
@@ -216,7 +225,6 @@ fn log_2(n: usize) -> usize {
 
 #[cfg(test)]
 mod tests {
-
     use crate::field::fields::u64_prime_field::U64PrimeField;
 
     use super::*;
@@ -359,5 +367,10 @@ mod tests {
         let mut a = DenseMultilinearPolynomial::new(vec![FE::from(3); 4]);
         let b = DenseMultilinearPolynomial::new(vec![FE::from(3); 2]);
         a.extend(&b);
+    }
+
+    #[test]
+    fn fix_vars() {
+        todo!()
     }
 }
