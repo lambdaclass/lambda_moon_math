@@ -1,4 +1,5 @@
 extern crate alloc;
+use super::point::CirclePoint;
 #[cfg(feature = "alloc")]
 use super::{
     cfft::{cfft, icfft, order_cfft_result_naive, order_icfft_input_naive},
@@ -69,6 +70,53 @@ pub fn interpolate_cfft(
         .inv()
         .unwrap();
     eval_ordered.iter().map(|coef| coef * factor).collect()
+}
+
+/// Note: This implementation uses a straightforward approach and is intended for testing purposes only.
+pub fn evaluate_point(
+    coef: &Vec<FieldElement<Mersenne31Field>>,
+    point: CirclePoint<Mersenne31Field>,
+) -> FieldElement<Mersenne31Field> {
+    let order = coef.len();
+    assert!(
+        order.is_power_of_two(),
+        "Coefficient length must be a power of 2"
+    );
+
+    let v_len = order.trailing_zeros() as usize;
+
+    let mut a = point.x;
+    let mut v = Vec::with_capacity(v_len);
+    v.push(FieldElement::one());
+    v.push(point.x);
+    for _ in 2..v_len {
+        a = a.square().double() - FieldElement::one();
+        v.push(a);
+    }
+
+    let mut result = FieldElement::zero();
+
+    for i in 0..order {
+        let mut term = coef[i];
+
+        if i % 2 == 1 {
+            term = term * point.y;
+        }
+
+        let mut idx = i / 2;
+        let mut pos = 0;
+        while idx > 0 {
+            if idx % 2 == 1 {
+                term = term * v[pos + 1];
+            }
+            idx /= 2;
+            pos += 1;
+        }
+
+        result = result + term;
+    }
+
+    result
 }
 
 #[cfg(test)]
@@ -292,6 +340,12 @@ mod tests {
             FE::from(32),
         ];
         let evals = evaluate_cfft(coeff.clone());
+
+        let coset = Coset::new_standard(5);
+        let coset_points = Coset::get_coset_points(&coset);
+
+        assert_eq!(evals[4], evaluate_point(&coeff, coset_points[4].clone()));
+
         let new_coeff = interpolate_cfft(evals);
 
         assert_eq!(coeff, new_coeff);

@@ -1,6 +1,6 @@
 [workspace]
 
-members = ["math", "crypto", "gpu", "benches", "provers/plonk", "provers/stark", "provers/groth16", "provers/groth16/arkworks-adapter", "provers/groth16/circom-adapter", "examples/merkle-tree-cli", "examples/prove-miden", "provers/winterfell_adapter", "examples/shamir_secret_sharing","examples/pinocchio", "examples/prove-verify-circom", "examples/baby-snark"]
+members = ["math", "crypto", "gpu", "benches", "provers/plonk", "provers/stark", "provers/groth16", "provers/groth16/arkworks-adapter", "provers/groth16/circom-adapter", "examples/merkle-tree-cli", "examples/prove-miden", "provers/winterfell_adapter", "examples/shamir_secret_sharing","examples/pinocchio", "examples/prove-verify-circom", "examples/baby-snark", "provers/circle_stark"]
 exclude = ["ensure-no_std"]
 resolver = "2"
 

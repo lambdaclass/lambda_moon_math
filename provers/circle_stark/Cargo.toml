@@ -1,0 +1,16 @@
+[package]
+name = "circle_stark"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+lambdaworks-math = { workspace = true, features = [
+    "std",
+    "lambdaworks-serde-binary",
+] }
+lambdaworks-crypto = { workspace = true, features = ["std", "serde"] }
+
+thiserror = "1.0.38"
+itertools = "0.11.0"

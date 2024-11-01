@@ -1,3 +1,4 @@
+use crate::traits::{AsBytes, ByteConversion};
 use crate::{
     errors::CreationError,
     field::{
@@ -200,6 +201,12 @@ impl FieldElement<Mersenne31Field> {
 impl Display for FieldElement<Mersenne31Field> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:x}", self.representative())
+    }
+}
+
+impl AsBytes for FieldElement<Mersenne31Field> {
+    fn as_bytes(&self) -> alloc::vec::Vec<u8> {
+        self.to_bytes_be()
     }
 }
 
