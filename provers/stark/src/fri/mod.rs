@@ -92,7 +92,7 @@ where
                 for layer in fri_layers {
                     // symmetric element
                     let evaluation_sym = layer.evaluation[index ^ 1].clone();
-                    let auth_path_sym = layer.merkle_tree.get_proof_by_pos(index >> 1).unwrap();
+                    let auth_path_sym = layer.merkle_tree.get_proof(index >> 1).unwrap();
                     layers_evaluations_sym.push(evaluation_sym);
                     layers_auth_paths_sym.push(auth_path_sym);
 

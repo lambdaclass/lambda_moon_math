@@ -679,9 +679,7 @@ pub trait IsStarkProver<A: AIR> {
         FieldElement<A::Field>: AsBytes + Sync + Send,
         FieldElement<A::FieldExtension>: AsBytes + Sync + Send,
     {
-        let proof = composition_poly_merkle_tree
-            .get_proof_by_pos(index)
-            .unwrap();
+        let proof = composition_poly_merkle_tree.get_proof(index).unwrap();
 
         let lde_composition_poly_parts_evaluation: Vec<_> = lde_composition_poly_evaluations
             .iter()
@@ -729,8 +727,8 @@ pub trait IsStarkProver<A: AIR> {
         let index = challenge * 2;
         let index_sym = challenge * 2 + 1;
         PolynomialOpenings {
-            proof: tree.get_proof_by_pos(index).unwrap(),
-            proof_sym: tree.get_proof_by_pos(index_sym).unwrap(),
+            proof: tree.get_proof(index).unwrap(),
+            proof_sym: tree.get_proof(index_sym).unwrap(),
             evaluations: lde_trace
                 .get_row(reverse_index(index, domain_size as u64))
                 .to_vec(),

@@ -26,26 +26,30 @@ impl Goldilocks64Field {
 impl ByteConversion for u64 {
     #[cfg(feature = "alloc")]
     fn to_bytes_be(&self) -> alloc::vec::Vec<u8> {
-        unimplemented!()
+        self.to_be_bytes().to_vec()
     }
 
     #[cfg(feature = "alloc")]
     fn to_bytes_le(&self) -> alloc::vec::Vec<u8> {
-        unimplemented!()
+        self.to_le_bytes().to_vec()
     }
 
     fn from_bytes_be(_bytes: &[u8]) -> Result<Self, crate::errors::ByteConversionError>
     where
         Self: Sized,
     {
-        unimplemented!()
+        Ok(u64::from_be_bytes(_bytes.try_into().expect(
+            "Tried to create a u64 from the byte array but its size was not 8",
+        )))
     }
 
     fn from_bytes_le(_bytes: &[u8]) -> Result<Self, crate::errors::ByteConversionError>
     where
         Self: Sized,
     {
-        unimplemented!()
+        Ok(u64::from_le_bytes(_bytes.try_into().expect(
+            "Tried to create a u64 from the byte array but its size was not 8",
+        )))
     }
 }
 

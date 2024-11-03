@@ -4,19 +4,22 @@ use super::traits::IsMerkleTreeBackend;
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
-pub fn sibling_index(node_index: usize) -> usize {
-    if node_index % 2 == 0 {
-        node_index - 1
+pub fn get_sibling_pos(node_pos: usize) -> usize {
+    if node_pos % 2 == 0 {
+        if node_pos == 0 {
+            return node_pos;
+        }
+        node_pos - 1
     } else {
-        node_index + 1
+        node_pos + 1
     }
 }
 
-pub fn parent_index(node_index: usize) -> usize {
-    if node_index % 2 == 0 {
-        (node_index - 1) / 2
+pub fn get_parent_pos(node_pos: usize) -> usize {
+    if node_pos % 2 == 0 {
+        (node_pos - 1) / 2
     } else {
-        node_index / 2
+        node_pos / 2
     }
 }
 
