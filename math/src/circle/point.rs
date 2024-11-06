@@ -47,6 +47,13 @@ impl<F: IsField + HasCircleParams<F>> CirclePoint<F> {
         }
         res
     }
+    pub fn v_n(&self, log_n: usize) -> FieldElement<F> {
+        let mut x = self.x.clone(); // Make a mutable copy of the x-coordinate.
+        for _ in 0..(log_n - 1) {
+            x = x.square().double() - FieldElement::one();
+        }
+        x
+    }
 
     /// Computes the inverse of the point.
     /// We are using -(x, y) = (x, -y), i.e. the inverse of the group opertion is conjugation

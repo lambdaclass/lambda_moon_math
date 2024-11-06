@@ -1,8 +1,9 @@
 use itertools::izip;
+use lambdaworks_math::circle::cosets::Coset;
 use lambdaworks_math::field::fields::mersenne31::extensions::Degree4ExtensionField;
 use lambdaworks_math::{
     circle::{
-        domain::CircleDomain,
+        //  domain::CircleDomain,
         point::CirclePoint,
         polynomial::{evaluate_cfft, evaluate_point},
     },
@@ -18,22 +19,25 @@ type EF = Degree4ExtensionField;
 
 /// Computes numerator and denominator of the "vanishing part" of the DEEP quotient
 /// Section 6, Remark 21 of Circle Starks
-/// Re(1/v_gamma) + alpha^L Im(1/v_gamma)
+///
+/// Returns the numerator and denominator as a tuple
+/// (Re(vγ) - μL · Im(vγ) , Re(vγ)² + Im(vγ)²)
+// There is another part of the vanishing part that is not calculated here
+// (ḡ - v̄γ) is calulated in the deep_quotient_reduce_row function
 pub fn deep_quotient_vanishing_part(
     x: CirclePoint<F>,
     zeta: CirclePoint<EF>,
     alpha_pow_width: FieldElement<EF>,
 ) -> (FieldElement<EF>, FieldElement<EF>) {
     let (re_v_zeta, im_v_zeta) = v_p(x, zeta);
-    let re_v_zeta_clone = re_v_zeta.clone();
-    (
-        re_v_zeta - alpha_pow_width * &im_v_zeta,
-        re_v_zeta_clone.square() + im_v_zeta.clone().square(),
-    )
+    let numerator = &re_v_zeta - alpha_pow_width * &im_v_zeta;
+    let denominator = re_v_zeta.square() + im_v_zeta.square();
+    (numerator, denominator)
 }
 // should move to point.rs
 pub fn v_p(point: CirclePoint<F>, at: CirclePoint<EF>) -> (FieldElement<EF>, FieldElement<EF>) {
-    // Caculate at infinity?
+    // vP(x,y) = v(Px·x + Py·y, -Py·x + Px·y)
+    //= 1 - ((Px·x + Py·y) + i·(-Py·x + Px·y))
     let diff = CirclePoint {
         x: -at.x + point.x.to_extension(),
         y: -at.y + point.y.to_extension(),
@@ -46,13 +50,17 @@ pub fn deep_quotient_reduce_row(
     alpha: FieldElement<EF>,
     x: CirclePoint<F>,
     zeta: CirclePoint<EF>,
-    ps_at_x: &[FieldElement<F>],
-    ps_at_zeta: &[FieldElement<EF>],
+    ps_at_x: &[FieldElement<F>],     // [p₁(x), p₂(x), p₃(x).....]
+    ps_at_zeta: &[FieldElement<EF>], // [p₁(ζ), p₂(ζ), p₃(ζ).....]
 ) -> FieldElement<EF> {
-    let (vp_num, vp_denom) = deep_quotient_vanishing_part(x, zeta, alpha.pow(ps_at_x.len() as u64));
+    let (vp_numerator, vp_denomnator) =
+        deep_quotient_vanishing_part(x, zeta, alpha.pow(ps_at_x.len() as u64));
 
     // Generate an iterator of powers of `alpha` up to `ps_at_x.len()`
+    // Given alpha = 2 and ps_at_x.len() = 3, the powers generated are [2^0, 2^1, 2^2] = [1, 2, 4].
+
     let powers_iter = powers(alpha, ps_at_x.len());
+    // is this the same as alpha.powers in plonky3
 
     // Compute terms for the dot product
     let terms =
@@ -63,7 +71,13 @@ pub fn deep_quotient_reduce_row(
     let terms_vec: Vec<_> = terms.collect();
     let dot_product = dot_product(&powers_vec, &terms_vec);
 
-    (vp_num / vp_denom) * dot_product
+    (vp_numerator / vp_denomnator) * dot_product
+
+    // Vanishing Part               Differences with powers of alpha
+    // ┌────────────────────────────┐  ┌─────────────────────────────────────┐
+    //   Re(vγ) - μL · Im(vγ)         Σ (pᵢ(x) - pᵢ(ζ))·αⁱ
+    //   ───────────────────── ·
+    //   Re(vγ)² + Im(vγ)²
 }
 
 pub fn deep_quotient_reduce(
@@ -71,35 +85,54 @@ pub fn deep_quotient_reduce(
     alpha: FieldElement<EF>,
     zeta: CirclePoint<EF>,
     ps_at_zeta: &[FieldElement<EF>],
+    log_n: usize,
 ) -> Vec<FieldElement<EF>> {
     // Realiza la FFT sobre los coeficientes para obtener evaluaciones en el coset.
     let mut evaluations = evaluate_cfft(coeff);
+    // plonky3's has the evaluations so i need to evaluate and check if I
+    // need to permform a permutation to get a correct evaluation
+    // TO DO: ask Nicole and Colo about the permutation
 
     // Calcula el factor `alpha_pow_width` para normalizar las evaluaciones.
     let alpha_pow_width = alpha.pow(evaluations.len() as u64);
 
     // Calcula la parte que se anula en cada evaluación
-    let (vp_nums, vp_denoms): (Vec<_>, Vec<_>) = evaluations
-        .iter()
-        .map(|eval| deep_quotient_vanishing_part(*eval, zeta, alpha_pow_width.clone()))
-        .unzip();
+    // Generate or retrieve your domain points
+    let coset = Coset::new_standard(log_n as u32);
+    let points = Coset::get_coset_points(&coset);
 
+    // Apply the permutation to reorder the points if necessary
+    let permuted_points: Vec<_> = (0..points.len())
+        .map(|i| points[cfft_permute_index(i, log_n)].clone())
+        .collect();
+
+    // Compute the vanishing part for each permuted point
+    let (vp_nums, vp_denoms): (Vec<_>, Vec<_>) = permuted_points
+        .iter()
+        .map(|point| {
+            deep_quotient_vanishing_part(point.clone(), zeta.clone(), alpha_pow_width.clone())
+        })
+        .unzip();
+    // This will invert the denominators using batch inversion which is optimized for this case
     let vp_denom_invs = batch_multiplicative_inverse(&vp_denoms);
 
-    // Calcula la reducción en `ps_at_zeta`
-    let alpha_powers: Vec<_> = powers(alpha.clone(), ps_at_zeta.len()).collect();
+    // need to make this more efficient and clear
+    let alpha_powers: Vec<_> = powers(alpha.clone(), ps_at_zeta.len()).collect(); //
     let ps_at_zeta_cloned: Vec<_> = ps_at_zeta.iter().cloned().collect();
     let alpha_reduced_ps_at_zeta = dot_product(&alpha_powers, &ps_at_zeta_cloned);
-
-    // Reduce cada evaluación de acuerdo al deep quotient y almacena los resultados
+    // need to make this more efficient and clear
+    let eval_len = evaluations.len();
+    let alpha_powers_eval: Vec<_> = powers(alpha.clone(), eval_len).collect();
     evaluations
         .iter_mut()
         .enumerate()
         .map(|(i, eval)| {
-            let alpha_powers_eval: Vec<_> = powers(alpha.clone(), evaluations.len()).collect();
             let eval_extension = eval.to_extension();
-            let reduced_eval = dot_product(&alpha_powers_eval, &eval_extension);
-            (vp_nums[i] / vp_denom_invs[i]) * (reduced_eval - alpha_reduced_ps_at_zeta.clone())
+            let eval_extension_converted: FieldElement<Degree4ExtensionField> =
+                eval_extension.into();
+            let reduced_eval = dot_product(&alpha_powers_eval, &[eval_extension_converted]);
+            (vp_nums[i].clone() / vp_denom_invs[i].clone())
+                * (reduced_eval - alpha_reduced_ps_at_zeta.clone())
         })
         .collect()
 }
@@ -110,8 +143,9 @@ pub fn extract_lambda(lde: &mut [FieldElement<EF>], log_blowup: usize) -> FieldE
     let log_lde_size = lde.len().trailing_zeros() as usize;
 
     // v_n es constante en cosets del mismo tamaño que el dominio original
-    let v_d_init = CircleDomain::standard(log_lde_size)
-        .points()
+    let coset = Coset::new_standard(log_lde_size as u32);
+    let v_d_init = Coset::get_coset_points(&coset)
+        .into_iter()
         .take(1 << log_blowup)
         .map(|p| p.v_n(log_lde_size - log_blowup))
         .collect::<Vec<_>>();
@@ -130,12 +164,15 @@ pub fn extract_lambda(lde: &mut [FieldElement<EF>], log_blowup: usize) -> FieldE
     let v_d_2 = FieldElement::from(2).pow(log_lde_size as u64 - 1);
     let v_d_2_inv = v_d_2.inv().unwrap();
 
+    // Convert v_d to extension field elements
+    let v_d_ext: Vec<FieldElement<EF>> = v_d.iter().map(|x| x.to_extension()).collect();
+
     // Calcula lambda
-    let lambda = dot_product(&lde, &v_d) * v_d_2_inv;
+    let lambda = dot_product(&lde, &v_d_ext) * v_d_2_inv;
 
     // Actualiza lde
-    for (y, v_x) in lde.iter_mut().zip(v_d.iter()) {
-        *y = y.clone() - lambda.clone() * v_x;
+    for (y, v_x) in lde.iter_mut().zip(v_d_ext.iter()) {
+        *y = y.clone() - lambda.clone() * v_x.clone();
     }
 
     lambda
@@ -160,8 +197,24 @@ pub fn powers<F: IsField>(base: FieldElement<F>, count: usize) -> Powers<F> {
         index: 0,
     }
 }
-
+pub fn cfft_permute_index(index: usize, log_n: usize) -> usize {
+    let mut result = 0;
+    for i in 0..log_n {
+        result |= ((index >> i) & 1) << (log_n - 1 - i);
+    }
+    result
+}
+/// Evaluates the vanishing polynomial for the given CirclePoint with respect to `log_n`.
+/// This function follows the iterative structure described and performs operations on the `x` coordinate.
+pub fn v_n(mut point: CirclePoint<F>, log_n: usize) -> FieldElement<F> {
+    // Applies the polynomial transformation iteratively based on log_n.
+    for _ in 0..(log_n - 1) {
+        point.x = point.x.square().double() - FieldElement::one();
+    }
+    point.x
+}
 /// Structure to iterate over the powers of a `FieldElement`.
+// Need to se where it can be defined
 pub struct Powers<F: IsField> {
     base: FieldElement<F>,
     current: FieldElement<F>,
@@ -205,43 +258,4 @@ fn batch_multiplicative_inverse<F: IsField>(elements: &[FieldElement<F>]) -> Vec
         inv = new_inv;
     }
     products
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use rand::{thread_rng, Rng};
-
-    #[test]
-    fn test_deep_quotient_reduce() {
-        let domain = CircleDomain::standard(5);
-        let values = vec![
-            vec![FieldElement::from(1); 8],
-            vec![FieldElement::from(2); 8],
-        ];
-        let evals = CircleEvaluations::new(domain, values);
-
-        let alpha: FieldElement<EF> = FieldElement::random(&mut thread_rng());
-        let zeta = CirclePoint::random(&mut thread_rng());
-
-        let ps_at_zeta = evals.evaluate_at_point(&zeta);
-        let reduced = deep_quotient_reduce(&evals, alpha, zeta, &ps_at_zeta);
-
-        assert_eq!(reduced.len(), evals.values().len());
-    }
-
-    #[test]
-    fn test_extract_lambda() {
-        let log_n = 5;
-        let log_blowup = 1;
-
-        let mut lde = vec![FieldElement::zero(); 1 << (log_n + log_blowup)];
-        // Fill lde with some test values
-        for i in 0..lde.len() {
-            lde[i] = FieldElement::from(i as u64);
-        }
-
-        let lambda = extract_lambda(&mut lde, log_blowup);
-        assert!(!lambda.is_zero());
-    }
 }

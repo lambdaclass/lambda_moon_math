@@ -14,3 +14,4 @@ lambdaworks-crypto = { workspace = true, features = ["std", "serde"] }
 
 thiserror = "1.0.38"
 itertools = "0.11.0"
+rand = "0.8"
