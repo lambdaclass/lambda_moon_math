@@ -13,7 +13,7 @@ use alloc::vec::Vec;
 pub struct Coset {
     // Coset: shift + <g_n> where n = 2^{log_2_size}.
     // Example: g_16 + <g_8>, n = 8, log_2_size = 3, shift = g_16.
-    pub log_2_size: u32, //TODO: Change log_2_size to u8 because log_2_size < 31.
+    pub log_2_size: u32, //TODO: Change log_2_size to u8 because log_2_size < 31.a
     pub shift: CirclePoint<Mersenne31Field>,
 }
 
@@ -40,7 +40,7 @@ impl Coset {
             log_2_size: coset.log_2_size - 1,
             shift: coset.shift,
         }
-    }
+    }  
 
     /// Given a coset shift + G returns the coset -shift + G.
     /// Note that (g_2n + <g_{n/2}>) U (-g_2n + <g_{n/2}>) = g_2n + <g_n>.

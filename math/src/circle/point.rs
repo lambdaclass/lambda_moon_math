@@ -1,5 +1,5 @@
 use super::errors::CircleError;
-use crate::field::traits::IsField;
+use crate::field::traits::{IsField, IsSubFieldOf};
 use crate::field::{
     element::FieldElement,
     fields::mersenne31::{extensions::Degree4ExtensionField, field::Mersenne31Field},
@@ -38,6 +38,55 @@ impl<F: IsField + HasCircleParams<F>> CirclePoint<F> {
         )
         .unwrap()
     }
+    pub fn v_n(&self, log_n: usize) -> FieldElement<F> {
+        let mut x = self.x.clone();
+        for _ in 0..(log_n - 1) {
+            x = x.square().double() - FieldElement::one();
+        }
+        x
+    }
+
+    pub fn v_p(
+        &self,
+        at: CirclePoint<Degree4ExtensionField>,
+    ) -> (
+        FieldElement<Degree4ExtensionField>,
+        FieldElement<Degree4ExtensionField>,
+    )
+    where
+        F: IsSubFieldOf<Degree4ExtensionField>,
+    {
+        // Compute the difference point between `self` (base field) and `at` (extension field)
+        let diff = CirclePoint {
+            x: -at.x + self.x.clone().to_extension(),
+            y: -at.y + self.y.clone().to_extension(),
+        };
+
+        // Return the computed real and imaginary parts
+        (
+            FieldElement::<Degree4ExtensionField>::one() - diff.x,
+            -diff.y,
+        )
+    }
+    /// Compute a point on the circle from a projective line parameter `t`.
+    /// This function uses the mapping (1 - t^2) / (1 + t^2), 2t / (1 + t^2) to derive
+    /// the coordinates of the point.
+    pub fn from_projective_line(t: FieldElement<F>) -> Self {
+        let t_square = t.square();
+        let one: FieldElement<F> = FieldElement::one();
+        let denominator = one.clone() + &t_square;
+
+        // Ensure the denominator is invertible
+        let inv_denominator = denominator
+            .inv()
+            .expect("Inversion failed: denominator must not be zero");
+
+        // Calculate x and y coordinates
+        let x = (one - t_square) * inv_denominator.clone();
+        let y = t.double() * inv_denominator;
+
+        Self::new(x, y).expect("Generated point does not lie on the circle")
+    }
 
     /// Computes 2^n * (x, y).
     pub fn repeated_double(self, n: u32) -> Self {
@@ -46,13 +95,6 @@ impl<F: IsField + HasCircleParams<F>> CirclePoint<F> {
             res = res.double();
         }
         res
-    }
-    pub fn v_n(&self, log_n: usize) -> FieldElement<F> {
-        let mut x = self.x.clone(); // Make a mutable copy of the x-coordinate.
-        for _ in 0..(log_n - 1) {
-            x = x.square().double() - FieldElement::one();
-        }
-        x
     }
 
     /// Computes the inverse of the point.
@@ -305,5 +347,13 @@ mod tests {
     fn subgroup_generator_has_correct_order() {
         let generator_n = G::get_generator_of_subgroup(7);
         assert_eq!(generator_n.repeated_double(7), G::zero());
+    }
+
+    #[test]
+    fn test_from_projective_line() {
+        let t = FE::from(2u64);
+        let point = G::from_projective_line(t);
+        let expected_sum = point.x.square() + point.y.square();
+        assert_eq!(expected_sum, FE::one(), "Point does not lie on the circle");
     }
 }

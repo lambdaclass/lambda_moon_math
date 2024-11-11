@@ -2,6 +2,7 @@ use super::circle_fri_functions::{fold_circle_to_univariate, fold_univariate};
 use crate::config::{BatchedMerkleTree, BatchedMerkleTreeBackend};
 use lambdaworks_crypto::fiat_shamir::is_transcript::IsTranscript;
 use lambdaworks_crypto::merkle_tree::{merkle::MerkleTree, traits::IsMerkleTreeBackend};
+use lambdaworks_math::field::fields::mersenne31::field::Mersenne31Field;
 use lambdaworks_math::traits::AsBytes;
 use lambdaworks_math::{
     circle::cosets::Coset,
@@ -11,31 +12,23 @@ use lambdaworks_math::{
     },
     polynomial::Polynomial,
 };
+type F = Mersenne31Field;
+type FE = FieldElement<F>;
 
 /// Represents a layer in the Circle FRI protocol.
 #[derive(Clone)]
-pub struct CircleFriLayer<F, B>
-where
-    F: IsField,
-    FieldElement<F>: AsBytes,
-    B: IsMerkleTreeBackend,
-{
-    pub evaluation: Vec<FieldElement<F>>,
-    pub merkle_tree: MerkleTree<B>,
-    pub coset_shift: FieldElement<F>,
+pub struct CircleFriLayer {
+    pub evaluation: Vec<FE>,
+    pub merkle_tree: MerkleTree<BatchedMerkleTreeBackend<F>>,
+    pub coset_shift: FE,
     pub domain_size: usize,
 }
 
-impl<F, B> CircleFriLayer<F, B>
-where
-    F: IsField,
-    FieldElement<F>: AsBytes,
-    B: IsMerkleTreeBackend,
-{
+impl CircleFriLayer {
     pub fn new(
-        evaluation: &[FieldElement<F>],
-        merkle_tree: MerkleTree<B>,
-        coset_shift: FieldElement<F>,
+        evaluation: &[FE],
+        merkle_tree: MerkleTree<BatchedMerkleTreeBackend<F>>,
+        coset_shift: FE,
         domain_size: usize,
     ) -> Self {
         Self {
