@@ -58,9 +58,9 @@ where
         let first_step = frame.get_evaluation_step(0);
         let second_step = frame.get_evaluation_step(1);
 
-        let a0 = first_step.get_main_evaluation_element(0, 2);
-        let a1 = second_step.get_main_evaluation_element(0, 2);
-        let res = (a1 - a0) * (a1 - a0 - FieldElement::<F>::one());
+        let a_perm0 = first_step.get_main_evaluation_element(0, 2);
+        let a_perm1 = second_step.get_main_evaluation_element(0, 2);
+        let res = (a_perm1 - a_perm0) * (a_perm1 - a_perm0 - FieldElement::<F>::one());
 
         transition_evaluations[self.constraint_idx()] = res;
     }
@@ -106,12 +106,12 @@ where
         let first_step = frame.get_evaluation_step(0);
         let second_step = frame.get_evaluation_step(1);
 
-        let a0 = first_step.get_main_evaluation_element(0, 2);
-        let a1 = second_step.get_main_evaluation_element(0, 2);
-        let v0 = first_step.get_main_evaluation_element(0, 3);
-        let v1 = second_step.get_main_evaluation_element(0, 3);
+        let a_perm0 = first_step.get_main_evaluation_element(0, 2);
+        let a_perm1 = second_step.get_main_evaluation_element(0, 2);
+        let v_perm0 = first_step.get_main_evaluation_element(0, 3);
+        let v_perm1 = second_step.get_main_evaluation_element(0, 3);
 
-        let res = (v1 - v0) * (a1 - a0 - FieldElement::<F>::one());
+        let res = (v_perm1 - v_perm0) * (a_perm1 - a_perm0 - FieldElement::<F>::one());
 
         transition_evaluations[self.constraint_idx()] = res;
     }
@@ -139,7 +139,7 @@ where
     }
 
     fn constraint_idx(&self) -> usize {
-        1
+        2
     }
 
     fn end_exemptions(&self) -> usize {
@@ -157,47 +157,38 @@ where
         let second_step = frame.get_evaluation_step(1);
 
         // Auxiliary constraints
-        let z_i = first_step.get_aux_evaluation_element(0, 0);
-        let z_i_plus_one = second_step.get_aux_evaluation_element(0, 0);
-        let gamma = &rap_challenges[0];
+        let p0 = first_step.get_aux_evaluation_element(0, 0);
+        let p1 = second_step.get_aux_evaluation_element(0, 0);
+        let alpha = &rap_challenges[0];
+        let z = &rap_challenges[1];
+        let a1 = second_step.get_main_evaluation_element(0, 0);
+        let v1 = second_step.get_main_evaluation_element(0, 1);
+        let a_perm_1 = second_step.get_main_evaluation_element(0, 2);
+        let v_perm_1 = second_step.get_main_evaluation_element(0, 3);
 
-        let a_i = first_step.get_main_evaluation_element(0, 0);
-        let b_i = first_step.get_main_evaluation_element(0, 1);
-
-        let res = z_i_plus_one * (b_i + gamma) - z_i * (a_i + gamma);
+        let res = (z - (a_perm_1 + alpha * v_perm_1)) * p1 - (z - (a1 + alpha * v1)) * p0;
 
         transition_evaluations[self.constraint_idx()] = res;
     }
 }
 
-pub struct FibonacciRAP<F>
+pub struct ReadOnlyRAP<F>
 where
     F: IsFFTField,
 {
     context: AirContext,
     trace_length: usize,
-    pub_inputs: FibonacciRAPPublicInputs<F>,
     transition_constraints: Vec<Box<dyn TransitionConstraint<F, F>>>,
 }
 
-#[derive(Clone, Debug)]
-pub struct FibonacciRAPPublicInputs<F>
-where
-    F: IsFFTField,
-{
-    pub steps: usize,
-    pub a0: FieldElement<F>,
-    pub a1: FieldElement<F>,
-}
-
-impl<F> AIR for FibonacciRAP<F>
+impl<F> AIR for ReadOnlyRAP<F>
 where
     F: IsFFTField + Send + Sync + 'static,
     FieldElement<F>: ByteConversion,
 {
     type Field = F;
     type FieldExtension = F;
-    type PublicInputs = FibonacciRAPPublicInputs<Self::Field>;
+    type PublicInputs = ();
 
     const STEP_SIZE: usize = 1;
 
