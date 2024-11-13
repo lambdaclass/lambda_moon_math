@@ -213,13 +213,11 @@ where
             Box::new(PermutationConstraint::new()),
         ];
 
-        let exemptions = 3 + trace_length - pub_inputs.steps - 1;
-
         let context = AirContext {
             proof_options: proof_options.clone(),
-            trace_columns: 3,
-            transition_offsets: vec![0, 1, 2],
-            transition_exemptions: vec![exemptions, 1],
+            trace_columns: 5,
+            transition_offsets: vec![0, 1],
+            transition_exemptions: vec![1],
             num_transition_constraints: transition_constraints.len(),
         };
 
@@ -237,24 +235,26 @@ where
         challenges: &[FieldElement<F>],
     ) -> TraceTable<Self::Field> {
         let main_segment_cols = main_trace.columns();
-        let not_perm = &main_segment_cols[0];
-        let perm = &main_segment_cols[1];
-        let gamma = &challenges[0];
+        let a = &main_segment_cols[0];
+        let v = &main_segment_cols[1];
+        let a_perm = &main_segment_cols[2];
+        let v_perm = &main_segment_cols[3];
+        let z = &challenges[0];
+        let alpha = &challenges[1];
 
         let trace_len = main_trace.n_rows();
 
         let mut aux_col = Vec::new();
-        for i in 0..trace_len {
-            if i == 0 {
-                aux_col.push(FieldElement::<Self::Field>::one());
-            } else {
-                let z_i = &aux_col[i - 1];
-                let n_p_term = not_perm[i - 1].clone() + gamma;
-                let p_term = &perm[i - 1] + gamma;
+        let num = z - (&a[0] + alpha * &v[0]);
+        let den = z - (&a_perm[0] + alpha * &v_perm[0]);
+        aux_col.push(num / den);
 
-                aux_col.push(z_i * n_p_term.div(p_term));
-            }
+        for i in 0..trace_len - 1 {
+            let num = (z - (&a[i + 1] + alpha * &v[i + 1])) * &aux_col[i];
+            let den = z - (&a_perm[i + 1] + alpha * &v_perm[i + 1]);
+            aux_col.push(num / den);
         }
+
         TraceTable::from_columns(vec![aux_col], 0, 1)
     }
 
@@ -262,27 +262,24 @@ where
         &self,
         transcript: &mut impl IsTranscript<Self::Field>,
     ) -> Vec<FieldElement<Self::FieldExtension>> {
-        vec![transcript.sample_field_element()]
+        vec![
+            transcript.sample_field_element(),
+            transcript.sample_field_element(),
+        ]
     }
 
     fn trace_layout(&self) -> (usize, usize) {
-        (2, 1)
+        (4, 1)
     }
 
     fn boundary_constraints(
         &self,
         _rap_challenges: &[FieldElement<Self::FieldExtension>],
     ) -> BoundaryConstraints<Self::FieldExtension> {
-        // Main boundary constraints
-        let a0 =
-            BoundaryConstraint::new_simple_main(0, FieldElement::<Self::FieldExtension>::one());
-        let a1 =
-            BoundaryConstraint::new_simple_main(1, FieldElement::<Self::FieldExtension>::one());
-
         // Auxiliary boundary constraints
         let a0_aux = BoundaryConstraint::new_aux(0, 0, FieldElement::<Self::FieldExtension>::one());
 
-        BoundaryConstraints::from_constraints(vec![a0, a1, a0_aux])
+        BoundaryConstraints::from_constraints(vec![a0_aux])
         // BoundaryConstraints::from_constraints(vec![a0, a1])
     }
 
