@@ -19,11 +19,11 @@ use lambdaworks_math::{
 };
 
 #[derive(Clone)]
-struct FibConstraint<F: IsFFTField> {
+struct ContinuityConstraint<F: IsFFTField> {
     phantom: PhantomData<F>,
 }
 
-impl<F: IsFFTField> FibConstraint<F> {
+impl<F: IsFFTField> ContinuityConstraint<F> {
     pub fn new() -> Self {
         Self {
             phantom: PhantomData,
@@ -31,12 +31,12 @@ impl<F: IsFFTField> FibConstraint<F> {
     }
 }
 
-impl<F> TransitionConstraint<F, F> for FibConstraint<F>
+impl<F> TransitionConstraint<F, F> for ContinuityConstraint<F>
 where
     F: IsFFTField + Send + Sync,
 {
     fn degree(&self) -> usize {
-        1
+        2
     }
 
     fn constraint_idx(&self) -> usize {
@@ -44,9 +44,8 @@ where
     }
 
     fn end_exemptions(&self) -> usize {
-        // NOTE: This is hard-coded for the example of steps = 16 in the integration tests.
-        // If that number changes in the test, this should be changed too or the test will fail.
-        3 + 32 - 16 - 1
+        // NOTE: We are assuming that hte trace has as length a power of 2.
+        1
     }
 
     fn evaluate(
@@ -58,13 +57,61 @@ where
     ) {
         let first_step = frame.get_evaluation_step(0);
         let second_step = frame.get_evaluation_step(1);
-        let third_step = frame.get_evaluation_step(2);
 
-        let a0 = first_step.get_main_evaluation_element(0, 0);
-        let a1 = second_step.get_main_evaluation_element(0, 0);
-        let a2 = third_step.get_main_evaluation_element(0, 0);
+        let a0 = first_step.get_main_evaluation_element(0, 2);
+        let a1 = second_step.get_main_evaluation_element(0, 2);
+        let res = (a1 - a0) * (a1 - a0 - FieldElement::<F>::one());
 
-        let res = a2 - a1 - a0;
+        transition_evaluations[self.constraint_idx()] = res;
+    }
+}
+
+#[derive(Clone)]
+struct SingleValueConstraint<F: IsFFTField> {
+    phantom: PhantomData<F>,
+}
+
+impl<F: IsFFTField> SingleValueConstraint<F> {
+    pub fn new() -> Self {
+        Self {
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<F> TransitionConstraint<F, F> for SingleValueConstraint<F>
+where
+    F: IsFFTField + Send + Sync,
+{
+    fn degree(&self) -> usize {
+        2
+    }
+
+    fn constraint_idx(&self) -> usize {
+        1
+    }
+
+    fn end_exemptions(&self) -> usize {
+        // NOTE: We are assuming that hte trace has as length a power of 2.
+        1
+    }
+
+    fn evaluate(
+        &self,
+        frame: &Frame<F, F>,
+        transition_evaluations: &mut [FieldElement<F>],
+        _periodic_values: &[FieldElement<F>],
+        _rap_challenges: &[FieldElement<F>],
+    ) {
+        let first_step = frame.get_evaluation_step(0);
+        let second_step = frame.get_evaluation_step(1);
+
+        let a0 = first_step.get_main_evaluation_element(0, 2);
+        let a1 = second_step.get_main_evaluation_element(0, 2);
+        let v0 = first_step.get_main_evaluation_element(0, 3);
+        let v1 = second_step.get_main_evaluation_element(0, 3);
+
+        let res = (v1 - v0) * (a1 - a0 - FieldElement::<F>::one());
 
         transition_evaluations[self.constraint_idx()] = res;
     }
@@ -162,7 +209,7 @@ where
         let transition_constraints: Vec<
             Box<dyn TransitionConstraint<Self::Field, Self::FieldExtension>>,
         > = vec![
-            Box::new(FibConstraint::new()),
+            Box::new(ContinuityConstraint::new()),
             Box::new(PermutationConstraint::new()),
         ];
 
