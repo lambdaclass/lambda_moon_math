@@ -215,7 +215,6 @@ where
         Self {
             context,
             trace_length,
-            pub_inputs: pub_inputs.clone(),
             transition_constraints,
         }
     }
@@ -293,7 +292,7 @@ where
     }
 
     fn pub_inputs(&self) -> &Self::PublicInputs {
-        &self.pub_inputs
+        &()
     }
 
     fn compute_transition_verifier(
