@@ -267,7 +267,11 @@ where
         _rap_challenges: &[FieldElement<Self::FieldExtension>],
     ) -> BoundaryConstraints<Self::FieldExtension> {
         // Auxiliary boundary constraints
-        let a0_aux = BoundaryConstraint::new_aux(0, 0, FieldElement::<Self::FieldExtension>::one());
+        let a0_aux = BoundaryConstraint::new_aux(
+            0,
+            self.trace_length - 1,
+            FieldElement::<Self::FieldExtension>::one(),
+        );
 
         BoundaryConstraints::from_constraints(vec![a0_aux])
         // BoundaryConstraints::from_constraints(vec![a0, a1])
