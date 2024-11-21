@@ -31,11 +31,21 @@ where
     /// the evaluation.
     /// Once computed, the evaluation should be inserted in the `transition_evaluations`
     /// vector, in the index corresponding to the constraint as given by `constraint_idx()`.
-    fn evaluate(
+    fn evaluate_prover(
         &self,
         frame: &Frame<F, E>,
+        // TODO: We are reading the main transition evaluations (that are base field elements) as field extension elements.
+        // Maybe we should have two different arrays: main_transition_evaluations and aux_transition_evaluations.
         transition_evaluations: &mut [FieldElement<E>],
         periodic_values: &[FieldElement<F>],
+        rap_challenges: &[FieldElement<E>],
+    );
+
+    fn evaluate_verifier(
+        &self,
+        frame: &Frame<E, E>,
+        transition_evaluations: &mut [FieldElement<E>],
+        periodic_values: &[FieldElement<E>],
         rap_challenges: &[FieldElement<E>],
     );
 

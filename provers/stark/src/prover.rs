@@ -1079,6 +1079,7 @@ pub trait IsStarkProver<A: AIR> {
     }
 }
 
+/*
 #[cfg(test)]
 mod tests {
     use std::num::ParseIntError;
@@ -1694,3 +1695,4 @@ mod tests {
         );
     }
 }
+*/

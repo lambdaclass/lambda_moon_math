@@ -73,13 +73,14 @@ pub trait AIR {
     ) -> Vec<FieldElement<Self::FieldExtension>> {
         let mut evaluations =
             vec![FieldElement::<Self::FieldExtension>::zero(); self.num_transition_constraints()];
-        self.transition_constraints()
-            .iter()
-            .for_each(|c| c.evaluate(frame, &mut evaluations, periodic_values, rap_challenges));
+        self.transition_constraints().iter().for_each(|c| {
+            c.evaluate_prover(frame, &mut evaluations, periodic_values, rap_challenges)
+        });
 
         evaluations
     }
 
+    // TODO: Shoudn't the main boundary constraints be over the base field?
     fn boundary_constraints(
         &self,
         rap_challenges: &[FieldElement<Self::FieldExtension>],
@@ -96,7 +97,15 @@ pub trait AIR {
         frame: &Frame<Self::FieldExtension, Self::FieldExtension>,
         periodic_values: &[FieldElement<Self::FieldExtension>],
         rap_challenges: &[FieldElement<Self::FieldExtension>],
-    ) -> Vec<FieldElement<Self::FieldExtension>>;
+    ) -> Vec<FieldElement<Self::FieldExtension>> {
+        let mut evaluations =
+            vec![FieldElement::<Self::FieldExtension>::zero(); self.num_transition_constraints()];
+        self.transition_constraints().iter().for_each(|c| {
+            c.evaluate_verifier(frame, &mut evaluations, periodic_values, rap_challenges)
+        });
+
+        evaluations
+    }
 
     fn context(&self) -> &AirContext;
 
