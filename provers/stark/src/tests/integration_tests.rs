@@ -1,20 +1,26 @@
 use lambdaworks_crypto::fiat_shamir::default_transcript::DefaultTranscript;
+use lambdaworks_math::field::fields::fft_friendly::babybear::MontgomeryConfigBabybear31PrimeField;
 use lambdaworks_math::field::fields::fft_friendly::quadratic_babybear::QuadraticBabybearField;
+use lambdaworks_math::field::fields::fft_friendly::quartic_babybear::Degree4BabyBearExtensionField;
+use lambdaworks_math::field::fields::montgomery_backed_prime_fields::MontgomeryBackendPrimeField;
 use lambdaworks_math::field::{
     element::FieldElement, fields::fft_friendly::babybear::Babybear31PrimeField,
 };
+use lambdaworks_math::traits::ByteConversion;
 
 use crate::examples::read_only_memory_small_field::{
     sort_rap_trace, ReadOnlyPublicInputs, ReadOnlyRAP,
 };
 use crate::proof::options::ProofOptions;
+use crate::proof::stark::StarkProof;
 use crate::prover::IsStarkProver;
 use crate::prover::Prover;
+use crate::trace::TraceTable;
+use crate::traits;
 use crate::transcript::StoneProverTranscript;
-use crate::verifier::Verifier;
+use crate::verifier::{IsStarkVerifier, Verifier};
 
 type FE = FieldElement<Babybear31PrimeField>;
-type QFE = FieldElement<QuadraticBabybearField>;
 
 // use lambdaworks_math::field::{
 //     element::FieldElement, fields::fft_friendly::stark_252_prime_field::Stark252PrimeField,
@@ -296,21 +302,21 @@ fn test_prove_read_only_memory() {
         a_perm0: FE::from(1),
         v_perm0: FE::from(7),
     };
-    let mut trace = sort_rap_trace(address_col, value_col);
+    let mut trace: TraceTable<Babybear31PrimeField, Degree4BabyBearExtensionField> =
+        sort_rap_trace(address_col, value_col);
     let proof_options = ProofOptions::default_test_options();
-    let proof = Prover::<ReadOnlyRAP<Babybear31PrimeField, QuadraticBabybearField>>::prove(
+    let proof = Prover::<ReadOnlyRAP<Babybear31PrimeField, Degree4BabyBearExtensionField>>::prove(
         &mut trace,
         &pub_inputs,
         &proof_options,
-        DefaultTranscript::<QuadraticBabybearField>::new(&[]),
+        DefaultTranscript::<Degree4BabyBearExtensionField>::new(&[]),
     )
     .unwrap();
-    assert!(Verifier::<
-        ReadOnlyRAP<Babybear31PrimeField, QuadraticBabybearField>,
-    >::verify(
+
+    assert!(Verifier::
         &proof,
         &pub_inputs,
         &proof_options,
-        DefaultTranscript::<QuadraticBabybearField>::new(&[])
-    ));
+        DefaultTranscript::<Degree4BabyBearExtensionField>::new(&[])
+    );
 }

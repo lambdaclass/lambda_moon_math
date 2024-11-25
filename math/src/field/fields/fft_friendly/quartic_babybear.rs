@@ -244,6 +244,30 @@ impl ByteConversion for [FieldElement<Babybear31PrimeField>; 4] {
     }
 }
 
+impl ByteConversion for FieldElement<Degree4BabyBearExtensionField> {
+    fn to_bytes_be(&self) -> alloc::vec::Vec<u8> {
+        todo!()
+    }
+
+    fn to_bytes_le(&self) -> alloc::vec::Vec<u8> {
+        todo!()
+    }
+
+    fn from_bytes_be(bytes: &[u8]) -> Result<Self, crate::errors::ByteConversionError>
+    where
+        Self: Sized,
+    {
+        todo!()
+    }
+
+    fn from_bytes_le(bytes: &[u8]) -> Result<Self, crate::errors::ByteConversionError>
+    where
+        Self: Sized,
+    {
+        todo!()
+    }
+}
+
 impl IsFFTField for Degree4BabyBearExtensionField {
     const TWO_ADICITY: u64 = 29;
     const TWO_ADIC_PRIMITVE_ROOT_OF_UNITY: Self::BaseType = [
