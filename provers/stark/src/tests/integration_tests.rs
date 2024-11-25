@@ -308,8 +308,7 @@ fn test_prove_read_only_memory() {
         sort_rap_trace(address_col, value_col);
     let proof_options = ProofOptions::default_test_options();
     let proof =
-        Prover::<ReadOnlyRAP<_, _>>::prove(&mut trace, &pub_inputs, &proof_options, transcript)
-            .unwrap();
+        Prover::<ReadOnlyRAP>::prove(&mut trace, &pub_inputs, &proof_options, transcript).unwrap();
 
     assert!(Verifier::
         &proof,

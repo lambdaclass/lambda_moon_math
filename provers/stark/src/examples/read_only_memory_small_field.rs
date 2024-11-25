@@ -12,40 +12,29 @@ use crate::{
     traits::AIR,
 };
 use lambdaworks_crypto::fiat_shamir::is_transcript::IsTranscript;
-use lambdaworks_math::field::traits::{IsField, IsPrimeField, IsSubFieldOf};
+use lambdaworks_math::field::{
+    fields::fft_friendly::{
+        babybear::Babybear31PrimeField, quartic_babybear::Degree4BabyBearExtensionField,
+    },
+    traits::{IsField, IsPrimeField, IsSubFieldOf},
+};
 use lambdaworks_math::{
     field::{element::FieldElement, traits::IsFFTField},
     traits::ByteConversion,
 };
-
-// type Field: IsFFTField + IsSubFieldOf<Self::FieldExtension> + Send + Sync;
-// type FieldExtension: IsField + Send + Sync;
+type F = Babybear31PrimeField;
+type E = Degree4BabyBearExtensionField;
 
 #[derive(Clone)]
-struct ContinuityConstraint<F: IsFFTField + IsSubFieldOf<E> + Send + Sync, E: IsField + Send + Sync>
-{
-    phantom_f: PhantomData<F>,
-    phantom_e: PhantomData<E>,
-}
+struct ContinuityConstraint;
 
-impl<F, E> ContinuityConstraint<F, E>
-where
-    F: IsFFTField + IsSubFieldOf<E> + Send + Sync,
-    E: IsField + Send + Sync,
-{
+impl ContinuityConstraint {
     pub fn new() -> Self {
-        Self {
-            phantom_f: PhantomData::<F>,
-            phantom_e: PhantomData::<E>,
-        }
+        Self {}
     }
 }
 
-impl<F, E> TransitionConstraint<F, E> for ContinuityConstraint<F, E>
-where
-    F: IsFFTField + IsSubFieldOf<E> + Send + Sync,
-    E: IsField + Send + Sync,
-{
+impl TransitionConstraint<F, E> for ContinuityConstraint {
     fn degree(&self) -> usize {
         2
     }
@@ -95,32 +84,15 @@ where
 }
 
 #[derive(Clone)]
-struct SingleValueConstraint<
-    F: IsFFTField + IsSubFieldOf<E> + Send + Sync,
-    E: IsField + Send + Sync,
-> {
-    phantom_f: PhantomData<F>,
-    phantom_e: PhantomData<E>,
-}
+struct SingleValueConstraint {}
 
-impl<F, E> SingleValueConstraint<F, E>
-where
-    F: IsFFTField + IsSubFieldOf<E> + Send + Sync,
-    E: IsField + Send + Sync,
-{
+impl SingleValueConstraint {
     pub fn new() -> Self {
-        Self {
-            phantom_f: PhantomData::<F>,
-            phantom_e: PhantomData::<E>,
-        }
+        Self {}
     }
 }
 
-impl<F, E> TransitionConstraint<F, E> for SingleValueConstraint<F, E>
-where
-    F: IsFFTField + IsSubFieldOf<E> + Send + Sync,
-    E: IsField + Send + Sync,
-{
+impl TransitionConstraint<F, E> for SingleValueConstraint {
     fn degree(&self) -> usize {
         2
     }
@@ -176,32 +148,15 @@ where
 }
 
 #[derive(Clone)]
-struct PermutationConstraint<
-    F: IsFFTField + IsSubFieldOf<E> + Send + Sync,
-    E: IsField + Send + Sync,
-> {
-    phantom_f: PhantomData<F>,
-    phantom_e: PhantomData<E>,
-}
+struct PermutationConstraint {}
 
-impl<F, E> PermutationConstraint<F, E>
-where
-    F: IsFFTField + IsSubFieldOf<E> + Send + Sync,
-    E: IsField + Send + Sync,
-{
+impl PermutationConstraint {
     pub fn new() -> Self {
-        Self {
-            phantom_f: PhantomData::<F>,
-            phantom_e: PhantomData::<E>,
-        }
+        Self {}
     }
 }
 
-impl<F, E> TransitionConstraint<F, E> for PermutationConstraint<F, E>
-where
-    F: IsFFTField + IsSubFieldOf<E> + Send + Sync,
-    E: IsField + Send + Sync,
-{
+impl TransitionConstraint<F, E> for PermutationConstraint {
     fn degree(&self) -> usize {
         2
     }
@@ -265,37 +220,25 @@ where
     }
 }
 
-pub struct ReadOnlyRAP<F, E>
-where
-    F: IsFFTField + IsSubFieldOf<E> + Send + Sync,
-    E: IsField + Send + Sync,
-{
+pub struct ReadOnlyRAP {
     context: AirContext,
     trace_length: usize,
-    pub_inputs: ReadOnlyPublicInputs<F>,
+    pub_inputs: ReadOnlyPublicInputs,
     transition_constraints: Vec<Box<dyn TransitionConstraint<F, E>>>,
 }
 
 #[derive(Clone, Debug)]
-pub struct ReadOnlyPublicInputs<F>
-where
-    F: IsFFTField,
-{
+pub struct ReadOnlyPublicInputs {
     pub a0: FieldElement<F>,
     pub v0: FieldElement<F>,
     pub a_perm0: FieldElement<F>,
     pub v_perm0: FieldElement<F>,
 }
 
-impl<F, E> AIR for ReadOnlyRAP<F, E>
-where
-    F: IsFFTField + IsSubFieldOf<E> + Send + Sync + 'static,
-    FieldElement<F>: ByteConversion,
-    E: IsField + Send + Sync + 'static,
-{
+impl AIR for ReadOnlyRAP {
     type Field = F;
     type FieldExtension = E;
-    type PublicInputs = ReadOnlyPublicInputs<F>;
+    type PublicInputs = ReadOnlyPublicInputs;
 
     const STEP_SIZE: usize = 1;
 
@@ -428,7 +371,7 @@ where
     }
 }
 
-pub fn sort_rap_trace<F: IsFFTField + IsSubFieldOf<E> + IsPrimeField, E: IsField>(
+pub fn sort_rap_trace(
     address: Vec<FieldElement<F>>,
     value: Vec<FieldElement<F>>,
 ) -> TraceTable<F, E> {
@@ -446,7 +389,6 @@ pub fn sort_rap_trace<F: IsFFTField + IsSubFieldOf<E> + IsPrimeField, E: IsField
     let zero_vec = vec![FieldElement::<E>::zero(); main_columns[0].len()];
     TraceTable::from_columns(main_columns, vec![zero_vec], 1)
 }
-
 #[cfg(test)]
 mod test {
     use super::*;
@@ -479,10 +421,7 @@ mod test {
             FE::from(80),
         ];
 
-        let sorted_trace = sort_rap_trace::<Babybear31PrimeField, QuadraticBabybearField>(
-            address_col.clone(),
-            value_col.clone(),
-        );
+        let sorted_trace = sort_rap_trace(address_col.clone(), value_col.clone());
 
         let expected_sorted_addresses = vec![
             FE::from(1),
