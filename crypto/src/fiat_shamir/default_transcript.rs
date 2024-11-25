@@ -1,11 +1,11 @@
 use super::is_transcript::IsTranscript;
 use core::marker::PhantomData;
+use lambdaworks_math::field::fields::fft_friendly::quartic_babybear::Degree4BabyBearExtensionField;
 use lambdaworks_math::{
     field::{element::FieldElement, traits::IsField},
     traits::ByteConversion,
 };
 use sha3::{Digest, Keccak256};
-
 pub struct DefaultTranscript<F: IsField> {
     hasher: Keccak256,
     phantom: PhantomData<F>,
@@ -157,5 +157,13 @@ mod tests {
                 0xf8, 0x32, 0x32, 0xbc
             ]
         );
+    }
+
+    #[test]
+    fn simple_field_elemet() {
+        let mut transcript = DefaultTranscript::<Degree4BabyBearExtensionField>::new(&[]);
+        let sample = transcript.sample_field_element();
+
+        println!("{:?}", sample);
     }
 }

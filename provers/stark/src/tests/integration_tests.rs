@@ -302,16 +302,14 @@ fn test_prove_read_only_memory() {
         a_perm0: FE::from(1),
         v_perm0: FE::from(7),
     };
+
+    let transcript = DefaultTranscript::<Degree4BabyBearExtensionField>::new(&[]);
     let mut trace: TraceTable<Babybear31PrimeField, Degree4BabyBearExtensionField> =
         sort_rap_trace(address_col, value_col);
     let proof_options = ProofOptions::default_test_options();
-    let proof = Prover::<ReadOnlyRAP<Babybear31PrimeField, Degree4BabyBearExtensionField>>::prove(
-        &mut trace,
-        &pub_inputs,
-        &proof_options,
-        DefaultTranscript::<Degree4BabyBearExtensionField>::new(&[]),
-    )
-    .unwrap();
+    let proof =
+        Prover::<ReadOnlyRAP<_, _>>::prove(&mut trace, &pub_inputs, &proof_options, transcript)
+            .unwrap();
 
     assert!(Verifier::
         &proof,

@@ -5,7 +5,6 @@ use crate::field::{
     traits::{IsFFTField, IsField, IsSubFieldOf},
 };
 
-#[cfg(feature = "lambdaworks-serde-binary")]
 use crate::traits::ByteConversion;
 
 /// We are implementig the extension of Baby Bear of degree 4 using the irreducible polynomial x^4 + 11.
@@ -246,7 +245,11 @@ impl ByteConversion for [FieldElement<Babybear31PrimeField>; 4] {
 
 impl ByteConversion for FieldElement<Degree4BabyBearExtensionField> {
     fn to_bytes_be(&self) -> alloc::vec::Vec<u8> {
-        todo!()
+        let mut byte_slice = ByteConversion::to_bytes_be(&self.value()[0]);
+        byte_slice.extend(ByteConversion::to_bytes_be(&self.value()[1]));
+        byte_slice.extend(ByteConversion::to_bytes_be(&self.value()[2]));
+        byte_slice.extend(ByteConversion::to_bytes_be(&self.value()[3]));
+        byte_slice
     }
 
     fn to_bytes_le(&self) -> alloc::vec::Vec<u8> {
@@ -257,7 +260,13 @@ impl ByteConversion for FieldElement<Degree4BabyBearExtensionField> {
     where
         Self: Sized,
     {
-        todo!()
+        const BYTES_PER_FIELD: usize = 8;
+        let x0 = FieldElement::from_bytes_be(&bytes[0..BYTES_PER_FIELD])?;
+        let x1 = FieldElement::from_bytes_be(&bytes[BYTES_PER_FIELD..BYTES_PER_FIELD * 2])?;
+        let x2 = FieldElement::from_bytes_be(&bytes[BYTES_PER_FIELD * 2..BYTES_PER_FIELD * 3])?;
+        let x3 = FieldElement::from_bytes_be(&bytes[BYTES_PER_FIELD * 3..BYTES_PER_FIELD * 4])?;
+
+        Ok(Self::new([x0, x1, x2, x3]))
     }
 
     fn from_bytes_le(bytes: &[u8]) -> Result<Self, crate::errors::ByteConversionError>
