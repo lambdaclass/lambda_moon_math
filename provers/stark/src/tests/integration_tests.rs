@@ -21,6 +21,7 @@ use crate::transcript::StoneProverTranscript;
 use crate::verifier::{IsStarkVerifier, Verifier};
 
 type FE = FieldElement<Babybear31PrimeField>;
+type QFE = FieldElement<Degree4BabyBearExtensionField>;
 
 // use lambdaworks_math::field::{
 //     element::FieldElement, fields::fft_friendly::stark_252_prime_field::Stark252PrimeField,
@@ -273,47 +274,146 @@ type FE = FieldElement<Babybear31PrimeField>;
 //     ));
 // }
 
+// #[test_log::test]
+// fn test_prove_read_only_memory() {
+//     let address_col = vec![
+//         FE::from(4),
+//         FE::from(5),
+//         FE::from(2),
+//         FE::from(6),
+//         FE::from(8),
+//         FE::from(7),
+//         FE::from(1),
+//         FE::from(3),
+//     ];
+//     let value_col = vec![
+//         FE::from(1),
+//         FE::from(2),
+//         FE::from(3),
+//         FE::from(4),
+//         FE::from(5),
+//         FE::from(6),
+//         FE::from(7),
+//         FE::from(8),
+//     ];
+
+//     let pub_inputs = ReadOnlyPublicInputs {
+//         a0: FE::from(4),
+//         v0: FE::from(1),
+//         a_perm0: FE::from(1),
+//         v_perm0: FE::from(7),
+//     };
+
+//     let transcript = DefaultTranscript::<Babybear31PrimeField>::new(&[]);
+//     let mut trace: TraceTable<Babybear31PrimeField, Babybear31PrimeField> =
+//         sort_rap_trace(address_col, value_col);
+//     let proof_options = ProofOptions::default_test_options();
+//     let proof = Prover::<ReadOnlyRAP>::prove(
+//         &mut trace,
+//         &pub_inputs,
+//         &proof_options,
+//         DefaultTranscript::<Babybear31PrimeField>::new(&[]),
+//     )
+//     .unwrap();
+
+//     assert!(Verifier::<ReadOnlyRAP>::verify(
+//         &proof,
+//         &pub_inputs,
+//         &proof_options,
+//         DefaultTranscript::<Babybear31PrimeField>::new(&[])
+//     ));
+// }
+
+// #[test_log::test]
+// fn test_prove_read_only_memory() {
+//     let address_col = vec![
+//         QFE::new([FE::from(4), FE::zero(), FE::zero(), FE::zero()]),
+//         QFE::new([FE::from(5), FE::zero(), FE::zero(), FE::zero()]),
+//         QFE::new([FE::from(2), FE::zero(), FE::zero(), FE::zero()]),
+//         QFE::new([FE::from(6), FE::zero(), FE::zero(), FE::zero()]),
+//         QFE::new([FE::from(8), FE::zero(), FE::zero(), FE::zero()]),
+//         QFE::new([FE::from(7), FE::zero(), FE::zero(), FE::zero()]),
+//         QFE::new([FE::from(1), FE::zero(), FE::zero(), FE::zero()]),
+//         QFE::new([FE::from(3), FE::zero(), FE::zero(), FE::zero()]),
+//     ];
+//     let value_col = vec![
+//         QFE::new([FE::from(1), FE::zero(), FE::zero(), FE::zero()]),
+//         QFE::new([FE::from(2), FE::zero(), FE::zero(), FE::zero()]),
+//         QFE::new([FE::from(3), FE::zero(), FE::zero(), FE::zero()]),
+//         QFE::new([FE::from(4), FE::zero(), FE::zero(), FE::zero()]),
+//         QFE::new([FE::from(5), FE::zero(), FE::zero(), FE::zero()]),
+//         QFE::new([FE::from(6), FE::zero(), FE::zero(), FE::zero()]),
+//         QFE::new([FE::from(7), FE::zero(), FE::zero(), FE::zero()]),
+//         QFE::new([FE::from(8), FE::zero(), FE::zero(), FE::zero()]),
+//     ];
+
+//     let pub_inputs = ReadOnlyPublicInputs {
+//         a0: QFE::new([FE::from(4), FE::zero(), FE::zero(), FE::zero()]),
+//         v0: QFE::new([FE::from(1), FE::zero(), FE::zero(), FE::zero()]),
+//         a_perm0: QFE::new([FE::from(1), FE::zero(), FE::zero(), FE::zero()]),
+//         v_perm0: QFE::new([FE::from(7), FE::zero(), FE::zero(), FE::zero()]),
+//     };
+//     let mut trace: TraceTable<Degree4BabyBearExtensionField, Degree4BabyBearExtensionField> =
+//         sort_rap_trace(address_col, value_col);
+//     let proof_options = ProofOptions::default_test_options();
+//     let proof = Prover::<ReadOnlyRAP>::prove(
+//         &mut trace,
+//         &pub_inputs,
+//         &proof_options,
+//         DefaultTranscript::<Degree4BabyBearExtensionField>::new(&[]),
+//     )
+//     .unwrap();
+
+//     assert!(Verifier::
+//         &proof,
+//         &pub_inputs,
+//         &proof_options,
+//         DefaultTranscript::<Degree4BabyBearExtensionField>::new(&[])
+//     );
+// }
+
 #[test_log::test]
 fn test_prove_read_only_memory() {
     let address_col = vec![
-        FE::from(4),
-        FE::from(5),
-        FE::from(2),
-        FE::from(6),
-        FE::from(8),
-        FE::from(7),
-        FE::from(1),
-        FE::from(3),
+        FE::from(3), // a0
+        FE::from(2), // a1
+        FE::from(2), // a2
+        FE::from(3), // a3
+        FE::from(4), // a4
+        FE::from(5), // a5
+        FE::from(1), // a6
+        FE::from(3), // a7
     ];
     let value_col = vec![
-        FE::from(1),
-        FE::from(2),
-        FE::from(3),
-        FE::from(4),
-        FE::from(5),
-        FE::from(6),
-        FE::from(7),
-        FE::from(8),
+        FE::from(10), // v0
+        FE::from(5),  // v1
+        FE::from(5),  // v2
+        FE::from(10), // v3
+        FE::from(25), // v4
+        FE::from(25), // v5
+        FE::from(7),  // v6
+        FE::from(10), // v7
     ];
 
     let pub_inputs = ReadOnlyPublicInputs {
-        a0: FE::from(4),
-        v0: FE::from(1),
-        a_perm0: FE::from(1),
-        v_perm0: FE::from(7),
+        a0: FE::from(3),
+        v0: FE::from(10),
+        a_perm0: FE::from(1), // a6
+        v_perm0: FE::from(7), // v6
     };
-
-    let transcript = DefaultTranscript::<Degree4BabyBearExtensionField>::new(&[]);
-    let mut trace: TraceTable<Babybear31PrimeField, Degree4BabyBearExtensionField> =
-        sort_rap_trace(address_col, value_col);
+    let mut trace = sort_rap_trace(address_col, value_col);
     let proof_options = ProofOptions::default_test_options();
-    let proof =
-        Prover::<ReadOnlyRAP>::prove(&mut trace, &pub_inputs, &proof_options, transcript).unwrap();
-
-    assert!(Verifier::
+    let proof = Prover::<ReadOnlyRAP>::prove(
+        &mut trace,
+        &pub_inputs,
+        &proof_options,
+        DefaultTranscript::new(&[]),
+    )
+    .unwrap();
+    assert!(Verifier::<ReadOnlyRAP>::verify(
         &proof,
         &pub_inputs,
         &proof_options,
-        DefaultTranscript::<Degree4BabyBearExtensionField>::new(&[])
-    );
+        DefaultTranscript::new(&[])
+    ));
 }
