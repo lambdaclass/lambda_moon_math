@@ -1,6 +1,6 @@
 #pragma once
 
-#include "felt_u32.h.metal" // Usa tu implementación Fp32 de 32 bits
+#include "felt_u32.h.metal" 
 
 #include "../fft/fft.h.metal"
 #include "../fft/twiddles.h.metal"
@@ -15,7 +15,6 @@ namespace {
     > Fp;
 }
 
-// Plantilla para operar con Fp32 en FFT
 template [[ host_name("radix2_dit_butterfly_babybear") ]] 
 [[kernel]] void radix2_dit_butterfly<Fp>(
     device Fp*,
