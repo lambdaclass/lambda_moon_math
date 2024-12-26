@@ -5,3 +5,4 @@
 // than headers and a unique source.
 
 #include "shaders/field/stark256.h.metal"
+#include "shaders/field/babybear31.h.metal"
