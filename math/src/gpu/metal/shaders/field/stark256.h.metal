@@ -1,63 +1,50 @@
 #pragma once
 
 #include "fp_u256.h.metal"
-
-#include "../fft/fft.h.metal"
+#include "../fft/util.h.metal"
 #include "../fft/twiddles.h.metal"
-#include "../fft/permutation.h.metal"
 
-// Prime Field of U256 with modulus 0x800000000000011000000000000000000000000000000000000000000000001, used for Starks
-namespace {
-    typedef Fp256<
+// Define Stark field parameters
+typedef Fp256<
     /* =N **/ /*u256(*/ 576460752303423505, 0, 0, 1 /*)*/,
     /* =R_SQUARED **/ /*u256(*/ 576413109808302096, 18446744073700081664, 5151653887, 18446741271209837569 /*)*/,
     /* =N_PRIME **/ /*u256(*/ 576460752303423504, 18446744073709551615, 18446744073709551615, 18446744073709551615 /*)*/
-    > Fp;
+> FpStark256;
+
+// Compute Twiddles for Stark256
+[[kernel]] void calc_twiddles_stark256(
+    device FpStark256* result [[ buffer(0) ]],
+    constant FpStark256& _omega [[ buffer(1) ]],
+    uint index [[ thread_position_in_grid ]]
+) {
+    calc_twiddles<FpStark256>(result, _omega, index);
 }
 
-template [[ host_name("radix2_dit_butterfly_stark256") ]] 
-[[kernel]] void radix2_dit_butterfly<Fp>(
-    device Fp*,
-    constant Fp*,
-    constant uint32_t&,
-    uint32_t,
-    uint32_t
-);
+// Compute Inverse Twiddles for Stark256
+[[kernel]] void calc_twiddles_inv_stark256(
+    device FpStark256* result [[ buffer(0) ]],
+    constant FpStark256& _omega [[ buffer(1) ]],
+    uint index [[ thread_position_in_grid ]]
+) {
+    calc_twiddles_inv<FpStark256>(result, _omega, index);
+}
 
-template [[ host_name("calc_twiddles_stark256") ]] 
-[[kernel]] void calc_twiddles<Fp>(
-    device Fp*,
-    constant Fp&, 
-    uint
-);
+// Compute Bit-Reversed Twiddles for Stark256
+[[kernel]] void calc_twiddles_bitrev_stark256(
+    device FpStark256* result [[ buffer(0) ]],
+    constant FpStark256& _omega [[ buffer(1) ]],
+    uint index [[ thread_position_in_grid ]],
+    uint size [[ threads_per_grid ]]
+) {
+    calc_twiddles_bitrev<FpStark256>(result, _omega, index, size);
+}
 
-template [[ host_name("calc_twiddles_inv_stark256") ]] 
-[[kernel]] void calc_twiddles_inv<Fp>(
-    device Fp*,
-    constant Fp&, 
-    uint
-);
-
-template [[ host_name("calc_twiddles_bitrev_stark256") ]] 
-[[kernel]] void calc_twiddles_bitrev<Fp>(
-    device Fp*,
-    constant Fp&, 
-    uint,
-    uint
-);
-
-template [[ host_name("calc_twiddles_bitrev_inv_stark256") ]] 
-[[kernel]] void calc_twiddles_bitrev_inv<Fp>(
-    device Fp*,
-    constant Fp&, 
-    uint,
-    uint
-);
-
-template [[ host_name("bitrev_permutation_stark256") ]] 
-[[kernel]] void bitrev_permutation<Fp>(
-    device Fp*, 
-    device Fp*, 
-    uint, 
-    uint
-);
+// Compute Inverse Bit-Reversed Twiddles for Stark256
+[[kernel]] void calc_twiddles_bitrev_inv_stark256(
+    device FpStark256* result [[ buffer(0) ]],
+    constant FpStark256& _omega [[ buffer(1) ]],
+    uint index [[ thread_position_in_grid ]],
+    uint size [[ threads_per_grid ]]
+) {
+    calc_twiddles_bitrev_inv<FpStark256>(result, _omega, index, size);
+}
