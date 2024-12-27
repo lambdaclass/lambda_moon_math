@@ -2,13 +2,12 @@
 #include "util.h.metal"
 
 template<typename Fp>
-[[kernel]] void bitrev_permutation(
-    device Fp* input [[ buffer(0) ]],
-    device Fp* result [[ buffer(1) ]],
-    uint index [[ thread_position_in_grid ]],
-    uint size [[ threads_per_grid ]]
+void bitrev_permutation_impl(
+    device Fp* input,
+    device Fp* result,
+    uint index,
+    uint size
 )
 {
     result[index] = input[reverse_index(index, size)];
 }
-
