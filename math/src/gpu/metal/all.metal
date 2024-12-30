@@ -6,4 +6,5 @@
 
 #include "shaders/field/babybear31.h.metal"
 #include "shaders/field/stark256.h.metal"
+#include "tests_babybear.h.metal"
 
