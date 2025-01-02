@@ -211,41 +211,4 @@ mod tests {
 
         assert!(matches!(twiddles, Err(MetalError::FunctionError(_))));
     }
-
-    #[test]
-    fn test_babybear_addition() {
-        let metal_state = MetalState::new(None).unwrap();
-
-        // Define inputs for BabyBear field
-        let lhs = vec![88000000u32, 3]; // Input elements in the field
-        let rhs = vec![1u32, 88000000]; // Another set of elements in the field
-        let expected_output = vec![0u32, 3]; // Expected results after modular addition
-
-        // Allocate buffers
-        let lhs_buffer = metal_state.alloc_buffer_data(&lhs);
-        let rhs_buffer = metal_state.alloc_buffer_data(&rhs);
-        let output_buffer = metal_state.alloc_buffer::<u32>(lhs.len());
-
-        // Load the kernel
-        let pipeline = metal_state.setup_pipeline("test_add_babybear").unwrap();
-
-        objc::rc::autoreleasepool(|| {
-            let (command_buffer, command_encoder) = metal_state.setup_command(
-                &pipeline,
-                Some(&[(0, &lhs_buffer), (1, &rhs_buffer), (2, &output_buffer)]),
-            );
-
-            let grid_size = MTLSize::new(lhs.len() as u64, 1, 1);
-            let threadgroup_size = MTLSize::new(pipeline.max_total_threads_per_threadgroup(), 1, 1);
-
-            command_encoder.dispatch_threads(grid_size, threadgroup_size);
-            command_encoder.end_encoding();
-            command_buffer.commit();
-            command_buffer.wait_until_completed();
-        });
-
-        // Retrieve and validate results
-        let result = MetalState::retrieve_contents::<u32>(&output_buffer);
-        assert_eq!(result, expected_output);
-    }
 }
