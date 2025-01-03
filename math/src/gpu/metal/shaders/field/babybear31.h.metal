@@ -123,7 +123,6 @@ typedef Fp32<
     out[index] = c;
 }
 
-
 [[kernel]] void mul_babybear(
     device FpBabyBear* lhs [[ buffer(0) ]],
     device FpBabyBear* rhs [[ buffer(1) ]],
@@ -141,3 +140,40 @@ typedef Fp32<
     // Guardamos el resultado de vuelta en `out`
     out[index] = c;
 }
+
+
+// [[kernel]] void mul_babybear(
+//     device uint* lhs [[ buffer(0) ]],
+//     device uint* rhs [[ buffer(1) ]],
+//     device uint* out [[ buffer(2) ]],
+//     device uint* debug_buffer [[ buffer(3) ]], // Nuevo buffer para depuración
+//     uint index [[ thread_position_in_grid ]]
+// )
+// {
+//     // Para que funcione el operator*, tenemos que cargar a variables "thread-local"
+//     uint a = lhs[index];
+//     uint b = rhs[index];
+
+//     // Constantes para la operación
+//     const uint N = 2013265921;        // Cambiar según el módulo de BabyBear
+//     const uint N_PRIME = 2281701377; // Cambiar según el preajuste
+
+//     ulong x = (ulong)a * (ulong)b;
+//     ulong t = (x * (ulong)N_PRIME) & 0xFFFFFFFFull; // mul and wrap
+//     debug_buffer[0] = t;
+//     ulong u = t * (ulong)N; // t * N mod 2^{32} (mul and wrap)
+//     debug_buffer[1] = u;
+//     ulong x_sub_u = x - u; // sub and wrap
+//     debug_buffer[2] = x_sub_u;
+//     uint res = (uint)(x_sub_u >> 32);
+//     if (x < u) {
+//         res += N; // add and wrap
+//     }
+
+//     // if (res >= N) {
+//     // res -= N;
+//     // }
+//     debug_buffer[3] = res;
+//     // Guardamos el resultado de vuelta en `out`
+//     out[index] = res;
+// }

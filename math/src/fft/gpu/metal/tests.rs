@@ -1,25 +1,27 @@
 use super::*;
+use crate::field::element::FieldElement;
+use crate::field::fields::fft_friendly::stark_252_prime_field::MontgomeryConfigStark252PrimeField;
+use crate::field::fields::montgomery_backed_prime_fields::U256PrimeField;
 use lambdaworks_gpu::metal::abstractions::errors::MetalError;
 use lambdaworks_gpu::metal::abstractions::state::*;
 use metal::MTLSize;
 
 #[test]
 fn test_add_babybear_metal() -> Result<(), MetalError> {
-    // Inicializar el estado de Metal
+    // Inicializar estado
     let state = MetalState::new(None)?;
 
-    // Entradas y resultados esperados
-    let lhs = vec![88000000u32, 3];
-    let rhs = vec![1u32, 88000000];
-    let expected_output = vec![0u32, 2];
-    // Suma modular para el campo BabyBear
+    // N = 2013265921
+    let lhs = vec![2013265920u32, 2];
+    let rhs = vec![3u32, 1];
+    let expected_output = vec![2u32, 3];
 
-    // Crear buffers para las entradas y la salida
+    // Buffers
     let lhs_buffer = state.alloc_buffer_data(&lhs);
     let rhs_buffer = state.alloc_buffer_data(&rhs);
     let out_buffer = state.alloc_buffer::<u32>(lhs.len());
 
-    // Configurar el pipeline para el kernel `add_babybear`
+    // El pipeline es el mismo, "add_babybear"
     let pipeline = state.setup_pipeline("add_babybear")?;
 
     objc::rc::autoreleasepool(|| {
@@ -28,7 +30,6 @@ fn test_add_babybear_metal() -> Result<(), MetalError> {
             Some(&[(0, &lhs_buffer), (1, &rhs_buffer), (2, &out_buffer)]),
         );
 
-        // Configurar el tamaño de la cuadrícula y ejecutar el kernel
         let grid_size = MTLSize::new(lhs.len() as u64, 1, 1);
         let threadgroup_size = MTLSize::new(pipeline.max_total_threads_per_threadgroup(), 1, 1);
 
@@ -38,7 +39,6 @@ fn test_add_babybear_metal() -> Result<(), MetalError> {
         command_buffer.wait_until_completed();
     });
 
-    // Recuperar y validar los resultados
     let result: Vec<u32> = MetalState::retrieve_contents(&out_buffer);
     assert_eq!(result, expected_output);
 
@@ -89,10 +89,12 @@ fn test_sub_babybear_metal() -> Result<(), MetalError> {
     // Inicializar el estado de Metal
     let state = MetalState::new(None)?;
 
-    // Probaremos "4 - 3 = 1 mod 88,000,001"
-    let lhs = vec![4u32];
-    let rhs = vec![3u32];
-    let expected_output = vec![1u32]; // 4 - 3 = 1
+    // Probaremos:
+    // 4 - 3 = 1,
+    // 4 - 5 = - 1 = N - 1
+    let lhs = vec![4u32, 4];
+    let rhs = vec![3u32, 5];
+    let expected_output = vec![1u32, 2013265920]; // 4 - 3 = 1
 
     // Buffers
     let lhs_buffer = state.alloc_buffer_data(&lhs);
@@ -131,14 +133,15 @@ fn test_mul_babybear_metal() -> Result<(), MetalError> {
 
     // 2) Usamos un único par de valores:
     //    lhs = [2], rhs = [3] => resultado = [6].
-    let lhs = vec![2u32];
+    let lhs = vec![4u32];
     let rhs = vec![3u32];
-    let expected_output = vec![6u32];
+    let expected_output = vec![12u32];
 
     // 3) Crear buffers
     let lhs_buffer = state.alloc_buffer_data(&lhs);
     let rhs_buffer = state.alloc_buffer_data(&rhs);
     let out_buffer = state.alloc_buffer::<u32>(lhs.len());
+    // let debug_buffer = state.alloc_buffer::<u32>(4); // Buffer para depuración
 
     // 4) Configurar pipeline para "mul_babybear"
     let pipeline = state.setup_pipeline("mul_babybear")?;
@@ -146,7 +149,12 @@ fn test_mul_babybear_metal() -> Result<(), MetalError> {
     objc::rc::autoreleasepool(|| {
         let (command_buffer, command_encoder) = state.setup_command(
             &pipeline,
-            Some(&[(0, &lhs_buffer), (1, &rhs_buffer), (2, &out_buffer)]),
+            Some(&[
+                (0, &lhs_buffer),
+                (1, &rhs_buffer),
+                (2, &out_buffer),
+                // (3, &debug_buffer), // Asocia el buffer de depuración
+            ]),
         );
 
         // 5) Lanzar el kernel
@@ -161,7 +169,17 @@ fn test_mul_babybear_metal() -> Result<(), MetalError> {
 
     // 6) Recuperar resultados y comparar
     let result: Vec<u32> = MetalState::retrieve_contents(&out_buffer);
-    assert_eq!(result, expected_output);
+    // let debug_result: Vec<u32> = MetalState::retrieve_contents(&debug_buffer);
+
+    let result_representative = (result[0] as u64 * (2 as u64).pow(32)) % 2013265921;
+
+    // // Agrega validación del debug_buffer si corresponde
+    // println!("DEBUG VALUE (t): {:?}", debug_result[0]);
+    // println!("DEBUG VALUE (u): {:?}", debug_result[1]);
+    // println!("DEBUG VALUE (x_sub_u): {:?}", debug_result[2]);
+    // println!("DEBUG VALUE (res): {:?}", debug_result[3]);
+
+    assert_eq!(result_representative, expected_output[0] as u64);
 
     Ok(())
 }

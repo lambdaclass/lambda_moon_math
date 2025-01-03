@@ -1,12 +1,5 @@
 #ifndef felt_u32_h
 #define felt_u32_h
-
-#include <metal_stdlib>
-using namespace metal;
-
-// -------------------------------------------------------
-// Plantilla para un entero de 32 bits en Montgomery mod N_0
-// -------------------------------------------------------
 template <
     /* =N **/ uint N_0,
     /* =R_SQUARED **/ uint R_SQUARED_0,
@@ -14,116 +7,75 @@ template <
 >
 class Fp32 {
 public:
-    // ------------- Constructors -------------
-    inline Fp32() { inner = 0u; }
-    inline Fp32(uint v) { inner = v; }
-
-    // Conversion a uint (por si necesitas)
-    inline explicit operator uint() const {
+    Fp32() = default;
+    constexpr Fp32(uint v) : inner(v) {}
+    constexpr explicit operator uint() const {
         return inner;
     }
-
-    // ------------- Operadores (+, -, *) -------------
-    // Se pasan los Fp32 por **valor**, NO por referencia
-    inline Fp32 operator+(Fp32 rhs) const {
-        // Suma modular con corrección
-        uint sum = inner + rhs.inner;
-        // “carryless” mod
-        if (sum >= N_0) {
-            sum -= N_0;
-        }
-        return Fp32(sum);
+    //============= Operator Overloads (mod N) =============//
+    constexpr Fp32 operator+(const thread Fp32& rhs) const {
+        return Fp32(add(inner, rhs.inner));
     }
-
-    inline Fp32 operator-(Fp32 rhs) const {
-        // Resta modular
-        uint a = inner;
-        uint b = rhs.inner;
-        uint diff = (a >= b) ? (a - b) : (N_0 - (b - a));
-        return Fp32(diff);
+    constexpr Fp32 operator-(const thread Fp32& rhs) const {
+        return Fp32(sub(inner, rhs.inner));
     }
-
-    inline Fp32 operator*(Fp32 rhs) const {
-        // Multiplicación Montgomery
-        ulong x = (ulong)inner * (ulong)rhs.inner;
-        ulong t = (x * (ulong)N_PRIME) & 0xFFFFFFFFull;
-        ulong u = t * (ulong)N_0;
-        ulong x_sub_u = x - u;
-        bool over = (x < u);
-
-        uint res = (uint)(x_sub_u >> 32);
-        if (over) {
-            res += N_0;
-        }
-        if (res >= N_0) {
-            res -= N_0;
-        }
-        return Fp32(res);
+    Fp32 operator*(const thread Fp32& rhs) const {
+        return Fp32(mul(inner, rhs.inner));
     }
-
-    // ------------- Exponenciación e Inversa -------------
-    inline Fp32 pow(uint exp) const {
-        // “1” en Montgomery => (1 * R_SQUARED) mod N,
-        // pero como simplificación (si ya usas inner=1 en Monty),
-        // ajusta según tu pipeline real.
-        Fp32 ONE(mulMonty(1u, R_SQUARED_0));
-        
+    //============= Exponentiation and Inverse =============//
+    inline Fp32 pow(uint exp) {
+        Fp32 const ONE = Fp32(mul(1u, R_SQUARED));
         Fp32 result = ONE;
-        Fp32 base = *this; // Copia local del “this”
-
         while (exp > 0) {
             if (exp & 1) {
-                result = result * base;
+                result = result * *this;
             }
             exp >>= 1;
-            base = base * base;
+            *this = *this * *this;
         }
         return result;
     }
-
-    inline Fp32 inverse() const {
-        // Para campo primo => inverso = this->pow(N_0 - 2)
-        return pow(N_0 - 2u);
+    inline Fp32 inverse() {
+        return pow(N - 2u);
     }
-
-    // ------------- Neg (opcional) -------------
     inline Fp32 neg() const {
-        // devuleve -x mod N
-        return (inner == 0u) ? Fp32(0u) : Fp32(N_0 - inner);
+        return (inner == 0) ? Fp32(0) : Fp32(N - inner);
     }
-
 private:
-    // Valor interno (Montgomery en 32 bits)
-    uint inner;
-
-    // ------------------------------------------------------------
-    // Si Metal se queja de "static constant" aquí, podrías quitarlo y
-    // hardcodear en las funciones (o usar #define).
-    // ------------------------------------------------------------
-    inline static constant uint N         = N_0;
-    inline static constant uint R_SQUARED = R_SQUARED_0;
-    inline static constant uint N_PRIME   = N_PRIME_0;
-    inline static constant uint R_SUB_N   = 0xFFFFFFFFu - N_0 + 1;
-
-    // ------------------------------------------------------------
-    // Función auxiliar para "montgofy" un uint normal
-    // ------------------------------------------------------------
-    inline uint mulMonty(uint lhs, uint rhs) const {
+    uint inner; // The 32-bit Montgomery value
+    // Compile-time constants
+    constexpr static const constant uint N         = N_0;
+    constexpr static const constant uint R_SQUARED = R_SQUARED_0;
+    constexpr static const constant uint N_PRIME   = N_PRIME_0;
+    constexpr static const constant uint R_SUB_N   = 0xFFFFFFFFu - N + 1;
+    // Computes `lhs + rhs mod N`
+    // Returns value in range [0,N)
+    inline uint add(uint lhs, uint rhs) const {
+        uint sum = lhs + rhs;
+        return sum
+            - (uint)(sum >= N) * N;
+            // TODO: Check if doing it as u256 is better:
+            // + (uint)(sum < lhs) * R_SUB_N;
+    }
+    // Computes `lhs - rhs mod N`
+    inline uint sub(uint lhs, uint rhs) const {
+        return (rhs <= lhs) ? lhs - rhs : N - (rhs - lhs);
+    }
+    // Montgomery multiplication
+    uint mul(uint lhs, uint rhs) const {
         ulong x = (ulong)lhs * (ulong)rhs;
-        ulong t = (x * (ulong)N_PRIME) & 0xFFFFFFFFull;
+        ulong t = (x * (ulong)N_PRIME) & 0xFFFFFFFFull; // mul and wrap
+        //debug_buffer[0] = t;
         ulong u = t * (ulong)N;
-        ulong x_sub_u = x - u;
-        bool over = (x < u);
-
+        ulong x_sub_u = x - u; // sub and wrap
         uint res = (uint)(x_sub_u >> 32);
-        if (over) {
-            res += N;
+        if (x < u) {
+            res += N; // add and wrap
         }
-       // if (res >= N) {
-       //     res -= N;
-       // }
+        // if (res >= N) {
+        //     res -= N;
+        // }
         return res;
     }
 };
-
-#endif // felt_u32_h
+#endif
