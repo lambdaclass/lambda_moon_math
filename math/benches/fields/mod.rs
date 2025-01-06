@@ -1,3 +1,4 @@
+pub mod baby_bear;
 pub mod mersenne31;
 pub mod mersenne31_montgomery;
 pub mod stark252;

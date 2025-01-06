@@ -13,6 +13,7 @@ pub mod secp256k1_field;
 pub mod secp256k1_scalarfield;
 /// Implementation of secp256r1 base field.
 pub mod secp256r1_field;
+pub mod u32_montgomery_backend_prime_field;
 /// Implementation of the u64 Goldilocks Prime field (p = 2^64 - 2^32 + 1)
 pub mod u64_goldilocks_field;
 /// Implementation of prime fields over 64 bit unsigned integers.
