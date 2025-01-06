@@ -141,6 +141,56 @@ typedef Fp32<
     out[index] = c;
 }
 
+[[kernel]] void pow_babybear(
+    device FpBabyBear* base [[ buffer(0) ]],
+    device uint* exponent [[ buffer(1) ]],
+    device FpBabyBear* out [[ buffer(2) ]],
+    uint index [[ thread_position_in_grid ]]
+)
+{
+    // Para que funcione el operator*, tenemos que cargar a variables "thread-local"
+    FpBabyBear a = base[index];
+    uint n = exponent[index];
+
+    // Multiplicamos modularmente (operator* ya definido en FpBabyBear)
+    FpBabyBear c = a.pow(n);
+
+    // Guardamos el resultado de vuelta en `out`
+    out[index] = c;
+}
+
+[[kernel]] void inv_babybear(
+    device FpBabyBear* input [[ buffer(0) ]],
+    device FpBabyBear* output [[ buffer(1) ]],
+    uint index [[ thread_position_in_grid ]]
+)
+{
+    // Para que funcione el operator*, tenemos que cargar a variables "thread-local"
+    FpBabyBear a = input[index];
+
+    // Multiplicamos modularmente (operator* ya definido en FpBabyBear)
+    FpBabyBear result = a.inverse();
+
+    // Guardamos el resultado de vuelta en `out`
+    output[index] = result;
+}
+
+[[kernel]] void mul_by_inv_babybear(
+    device FpBabyBear* input [[ buffer(0) ]],
+    device FpBabyBear* output [[ buffer(1) ]],
+    uint index [[ thread_position_in_grid ]]
+)
+{
+    // Para que funcione el operator*, tenemos que cargar a variables "thread-local"
+    FpBabyBear a = input[index];
+
+    // Multiplicamos modularmente (operator* ya definido en FpBabyBear)
+    FpBabyBear result = a * a.inverse();
+
+    // Guardamos el resultado de vuelta en `out`
+    output[index] = result;
+}
+
 
 // [[kernel]] void mul_babybear(
 //     device uint* lhs [[ buffer(0) ]],

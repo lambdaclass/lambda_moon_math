@@ -183,3 +183,75 @@ fn test_mul_babybear_metal() -> Result<(), MetalError> {
 
     Ok(())
 }
+
+#[test]
+fn test_pow_babybear_metal() -> Result<(), MetalError> {
+    let state = MetalState::new(None)?;
+
+    let base = vec![2u32];
+    let exponent = vec![3u32];
+    let expected_output = vec![8u32];
+
+    let base_buffer = state.alloc_buffer_data(&base);
+    let exp_buffer = state.alloc_buffer_data(&exponent);
+    let out_buffer = state.alloc_buffer::<u32>(base.len());
+
+    let pipeline = state.setup_pipeline("pow_babybear")?;
+
+    objc::rc::autoreleasepool(|| {
+        let (command_buffer, command_encoder) = state.setup_command(
+            &pipeline,
+            Some(&[(0, &base_buffer), (1, &exp_buffer), (2, &out_buffer)]),
+        );
+
+        let grid_size = MTLSize::new(base.len() as u64, 1, 1);
+        let threadgroup_size = MTLSize::new(pipeline.max_total_threads_per_threadgroup(), 1, 1);
+
+        command_encoder.dispatch_threads(grid_size, threadgroup_size);
+        command_encoder.end_encoding();
+        command_buffer.commit();
+        command_buffer.wait_until_completed();
+    });
+
+    let result: Vec<u32> = MetalState::retrieve_contents(&out_buffer);
+
+    let result_representative = (result[0] as u64 * (2 as u64).pow(32)) % 2013265921;
+
+    assert_eq!(result_representative, expected_output[0] as u64);
+
+    Ok(())
+}
+
+#[test]
+fn test_inv_babybear_metal() -> Result<(), MetalError> {
+    let state = MetalState::new(None)?;
+
+    let input = vec![2u32];
+    let expected_output = vec![1006632961u32];
+
+    let input_buffer = state.alloc_buffer_data(&input);
+    let output_buffer = state.alloc_buffer::<u32>(input.len());
+
+    let pipeline = state.setup_pipeline("inv_babybear")?;
+
+    objc::rc::autoreleasepool(|| {
+        let (command_buffer, command_encoder) =
+            state.setup_command(&pipeline, Some(&[(0, &input_buffer), (1, &output_buffer)]));
+
+        let grid_size = MTLSize::new(input.len() as u64, 1, 1);
+        let threadgroup_size = MTLSize::new(pipeline.max_total_threads_per_threadgroup(), 1, 1);
+
+        command_encoder.dispatch_threads(grid_size, threadgroup_size);
+        command_encoder.end_encoding();
+        command_buffer.commit();
+        command_buffer.wait_until_completed();
+    });
+
+    let result: Vec<u32> = MetalState::retrieve_contents(&output_buffer);
+
+    let result_representative = (result[0] as u64 * (2 as u64).pow(32)) % 2013265921;
+
+    assert_eq!(result_representative, expected_output[0] as u64);
+
+    Ok(())
+}
