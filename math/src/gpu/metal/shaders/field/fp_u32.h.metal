@@ -35,6 +35,16 @@ public:
         }
         return result;
     }
+    inline Fp32 pow_naive(uint exp) {
+        uint i = 1u;
+        Fp32 result =  *this;
+        while (i < exp) {
+            result = result * *this;
+            i = i + 1u;
+        }
+        return result;
+    }
+
     inline Fp32 inverse() {
         return pow(N - 2u);
     }
@@ -64,7 +74,7 @@ private:
     // Montgomery multiplication
     uint mul(uint lhs, uint rhs) const {
         ulong x = (ulong)lhs * (ulong)rhs;
-        ulong t = (x * (ulong)N_PRIME) & 0xFFFFFFFFull; // mul and wrap
+        ulong t = (x * (ulong)N_PRIME) & 0xFFFFFFFFull; // 32 lsb of x * mu mod 2^64
         //debug_buffer[0] = t;
         ulong u = t * (ulong)N;
         ulong x_sub_u = x - u; // sub and wrap
@@ -72,9 +82,11 @@ private:
         if (x < u) {
             res += N; // add and wrap
         }
-        // if (res >= N) {
-        //     res -= N;
-        // }
+
+        // NOTE: Should we remove this if?
+         if (res >= N) {
+             res -= N;
+         }
         return res;
     }
 };

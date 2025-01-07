@@ -131,11 +131,11 @@ fn test_mul_babybear_metal() -> Result<(), MetalError> {
     // 1) Inicializar el estado de Metal
     let state = MetalState::new(None)?;
 
-    // 2) Usamos un único par de valores:
-    //    lhs = [2], rhs = [3] => resultado = [6].
-    let lhs = vec![4u32];
-    let rhs = vec![3u32];
-    let expected_output = vec![12u32];
+    // 2) Usamos varios pares de valores:
+    //    lhs = [0], rhs = [3] => resultado = [0].
+    let lhs = vec![2013265921u32, 3, 123, 2013265919];
+    let rhs = vec![3u32, 4, 456, 3];
+    let expected_output = vec![0u32, 12, 56088, 2013265915];
 
     // 3) Crear buffers
     let lhs_buffer = state.alloc_buffer_data(&lhs);
@@ -171,13 +171,88 @@ fn test_mul_babybear_metal() -> Result<(), MetalError> {
     let result: Vec<u32> = MetalState::retrieve_contents(&out_buffer);
     // let debug_result: Vec<u32> = MetalState::retrieve_contents(&debug_buffer);
 
-    let result_representative = (result[0] as u64 * (2 as u64).pow(32)) % 2013265921;
+    let result_representative_0 = (result[0] as u64 * (2 as u64).pow(32)) % 2013265921;
+    let result_representative_1 = (result[1] as u64 * (2 as u64).pow(32)) % 2013265921;
+    let result_representative_2 = (result[2] as u64 * (2 as u64).pow(32)) % 2013265921;
+    let result_representative_3 = (result[3] as u64 * (2 as u64).pow(32)) % 2013265921;
 
     // // Agrega validación del debug_buffer si corresponde
     // println!("DEBUG VALUE (t): {:?}", debug_result[0]);
     // println!("DEBUG VALUE (u): {:?}", debug_result[1]);
     // println!("DEBUG VALUE (x_sub_u): {:?}", debug_result[2]);
     // println!("DEBUG VALUE (res): {:?}", debug_result[3]);
+
+    assert_eq!(result_representative_0, expected_output[0] as u64);
+    assert_eq!(result_representative_1, expected_output[1] as u64);
+    assert_eq!(result_representative_2, expected_output[2] as u64);
+    assert_eq!(result_representative_3, expected_output[3] as u64);
+
+    Ok(())
+}
+
+#[test]
+fn test_cube_babybear_metal() -> Result<(), MetalError> {
+    let state = MetalState::new(None)?;
+
+    let input = vec![2u32];
+    let expected_output = vec![8u32];
+
+    let input_buffer = state.alloc_buffer_data(&input);
+    let out_buffer = state.alloc_buffer::<u32>(input.len());
+
+    let pipeline = state.setup_pipeline("cube_babybear")?;
+
+    objc::rc::autoreleasepool(|| {
+        let (command_buffer, command_encoder) =
+            state.setup_command(&pipeline, Some(&[(0, &input_buffer), (1, &out_buffer)]));
+
+        let grid_size = MTLSize::new(input.len() as u64, 1, 1);
+        let threadgroup_size = MTLSize::new(pipeline.max_total_threads_per_threadgroup(), 1, 1);
+
+        command_encoder.dispatch_threads(grid_size, threadgroup_size);
+        command_encoder.end_encoding();
+        command_buffer.commit();
+        command_buffer.wait_until_completed();
+    });
+
+    let result: Vec<u32> = MetalState::retrieve_contents(&out_buffer);
+
+    // res * r2 mod N
+    let result_representative = (result[0] as u64 * 1172168163) % 2013265921;
+
+    assert_eq!(result_representative, expected_output[0] as u64);
+
+    Ok(())
+}
+
+#[test]
+fn test_quad_babybear_metal() -> Result<(), MetalError> {
+    let state = MetalState::new(None)?;
+
+    let input = vec![2u32];
+    let expected_output = vec![16u32];
+
+    let input_buffer = state.alloc_buffer_data(&input);
+    let out_buffer = state.alloc_buffer::<u32>(input.len());
+
+    let pipeline = state.setup_pipeline("quad_babybear")?;
+
+    objc::rc::autoreleasepool(|| {
+        let (command_buffer, command_encoder) =
+            state.setup_command(&pipeline, Some(&[(0, &input_buffer), (1, &out_buffer)]));
+
+        let grid_size = MTLSize::new(input.len() as u64, 1, 1);
+        let threadgroup_size = MTLSize::new(pipeline.max_total_threads_per_threadgroup(), 1, 1);
+
+        command_encoder.dispatch_threads(grid_size, threadgroup_size);
+        command_encoder.end_encoding();
+        command_buffer.commit();
+        command_buffer.wait_until_completed();
+    });
+
+    let result: Vec<u32> = MetalState::retrieve_contents(&out_buffer);
+
+    let result_representative = (result[0] as u64 * 317946875) % 2013265921;
 
     assert_eq!(result_representative, expected_output[0] as u64);
 
