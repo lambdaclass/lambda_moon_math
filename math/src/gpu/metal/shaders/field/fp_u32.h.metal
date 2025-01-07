@@ -46,7 +46,8 @@ public:
     }
 
     inline Fp32 inverse() {
-        return pow(N - 2u);
+        // TODO: Do we have to check that the input isnt zero?
+        return pow_naive(N - 2u);
     }
     inline Fp32 neg() const {
         return (inner == 0) ? Fp32(0) : Fp32(N - inner);
@@ -82,11 +83,10 @@ private:
         if (x < u) {
             res += N; // add and wrap
         }
-
-        // NOTE: Should we remove this if?
-         if (res >= N) {
-             res -= N;
-         }
+        // // NOTE: Should we remove this if?
+        //  if (res >= N) {
+        //      res -= N;
+        //  }
         return res;
     }
 };
