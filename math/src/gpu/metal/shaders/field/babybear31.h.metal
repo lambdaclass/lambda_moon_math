@@ -223,6 +223,25 @@ typedef Fp32<
     output[index] = result;
 }
 
+[[kernel]] void pow_and_mul_babybear(
+    device FpBabyBear* base [[ buffer(0) ]],
+    device uint* exp [[ buffer(1) ]],
+    device FpBabyBear* output [[ buffer(2) ]],
+    uint index [[ thread_position_in_grid ]]
+)
+{
+    // Para que funcione el operator*, tenemos que cargar a variables "thread-local"
+    FpBabyBear a = base[index];
+    uint n = exp[index];
+    FpBabyBear b = base[index];
+    
+    // Multiplicamos modularmente (operator* ya definido en FpBabyBear)
+    FpBabyBear result = b * a.pow(n);
+
+    // Guardamos el resultado de vuelta en `out`
+    output[index] = result;
+}
+
 
 // [[kernel]] void mul_babybear(
 //     device uint* lhs [[ buffer(0) ]],

@@ -25,13 +25,14 @@ public:
     //============= Exponentiation and Inverse =============//
     inline Fp32 pow(uint exp) {
         Fp32 const ONE = Fp32(mul(1u, R_SQUARED));
+        Fp32 base = *this;
         Fp32 result = ONE;
         while (exp > 0) {
             if (exp & 1) {
-                result = result * *this;
+                result = result * base;
             }
             exp >>= 1;
-            *this = *this * *this;
+            base = base * base;
         }
         return result;
     }
@@ -47,7 +48,7 @@ public:
 
     inline Fp32 inverse() {
         // TODO: Do we have to check that the input isnt zero?
-        return pow_naive(N - 2u);
+        return pow(N - 2u);
     }
     inline Fp32 neg() const {
         return (inner == 0) ? Fp32(0) : Fp32(N - inner);
