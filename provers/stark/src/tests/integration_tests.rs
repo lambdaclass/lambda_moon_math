@@ -2,7 +2,7 @@ use lambdaworks_crypto::fiat_shamir::default_transcript::DefaultTranscript;
 use lambdaworks_math::field::{
     element::FieldElement,
     fields::fft_friendly::{
-        babybear::Babybear31PrimeField, quartic_babybear::Degree4BabyBearExtensionField,
+        babybear_u32::Babybear31PrimeField, quartic_babybear_u32::Degree4BabyBearExtensionField,
         stark_252_prime_field::Stark252PrimeField,
     },
 };
@@ -301,8 +301,58 @@ fn test_prove_read_only_memory() {
     ));
 }
 
+// #[test_log::test]
+// fn test_prove_log_read_only_memory() {
+//     let address_col = vec![
+//         FieldElement::<Babybear31PrimeField>::from(3), // a0
+//         FieldElement::<Babybear31PrimeField>::from(2), // a1
+//         FieldElement::<Babybear31PrimeField>::from(2), // a2
+//         FieldElement::<Babybear31PrimeField>::from(3), // a3
+//         FieldElement::<Babybear31PrimeField>::from(4), // a4
+//         FieldElement::<Babybear31PrimeField>::from(5), // a5
+//         FieldElement::<Babybear31PrimeField>::from(1), // a6
+//         FieldElement::<Babybear31PrimeField>::from(3), // a7
+//     ];
+//     let value_col = vec![
+//         FieldElement::<Babybear31PrimeField>::from(30), // v0
+//         FieldElement::<Babybear31PrimeField>::from(20), // v1
+//         FieldElement::<Babybear31PrimeField>::from(20), // v2
+//         FieldElement::<Babybear31PrimeField>::from(30), // v3
+//         FieldElement::<Babybear31PrimeField>::from(40), // v4
+//         FieldElement::<Babybear31PrimeField>::from(50), // v5
+//         FieldElement::<Babybear31PrimeField>::from(10), // v6
+//         FieldElement::<Babybear31PrimeField>::from(30), // v7
+//     ];
+
+//     let pub_inputs = LogReadOnlyPublicInputs {
+//         a0: FieldElement::<Babybear31PrimeField>::from(3),
+//         v0: FieldElement::<Babybear31PrimeField>::from(30),
+//         a_sorted_0: FieldElement::<Babybear31PrimeField>::from(1),
+//         v_sorted_0: FieldElement::<Babybear31PrimeField>::from(10),
+//         m0: FieldElement::<Babybear31PrimeField>::from(1),
+//     };
+//     let mut trace = read_only_logup_trace(address_col, value_col);
+//     let proof_options = ProofOptions::default_test_options();
+//     let proof =
+//         Prover::<LogReadOnlyRAP<Babybear31PrimeField, Degree4BabyBearExtensionField>>::prove(
+//             &mut trace,
+//             &pub_inputs,
+//             &proof_options,
+//             DefaultTranscript::<Degree4BabyBearExtensionField>::new(&[]),
+//         )
+//         .unwrap();
+//     assert!(Verifier::<
+//         LogReadOnlyRAP<Babybear31PrimeField, Degree4BabyBearExtensionField>,
+//     >::verify(
+//         &proof,
+//         &pub_inputs,
+//         &proof_options,
+//         DefaultTranscript::<Degree4BabyBearExtensionField>::new(&[]),
+//     ));
+// }
+
 #[test_log::test]
-fn test_prove_log_read_only_memory() {
+fn test_prove_log_read_only_memory_u32() {
     let address_col = vec![
         FieldElement::<Babybear31PrimeField>::from(3), // a0
         FieldElement::<Babybear31PrimeField>::from(2), // a1

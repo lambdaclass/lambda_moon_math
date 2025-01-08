@@ -14,8 +14,12 @@ use crate::traits::AsBytes;
 
 /// We are implementig the extension of Baby Bear of degree 4 using the irreducible polynomial x^4 + 11.
 /// BETA = 11 and -BETA = -11 is the non-residue.
+/// Since `const_from_raw`` doesn't make the montgomery conversion, we calculated it.
+/// The montgomery form of a number `a` is a * R mod p.
+/// In Baby Bear field, R = 2^32 and p = 2013265921.
+/// Then, 939524073 = 11 * 2^32 mod 2013265921.
 pub const BETA: FieldElement<Babybear31PrimeField> =
-    FieldElement::<Babybear31PrimeField>::const_from_raw(11);
+    FieldElement::<Babybear31PrimeField>::const_from_raw(939524073);
 
 #[derive(Clone, Debug)]
 pub struct Degree4BabyBearExtensionField;
@@ -241,7 +245,7 @@ impl ByteConversion for [FieldElement<Babybear31PrimeField>; 4] {
     where
         Self: Sized,
     {
-        const BYTES_PER_FIELD: usize = 64;
+        const BYTES_PER_FIELD: usize = 32;
 
         let x0 = FieldElement::from_bytes_be(&bytes[0..BYTES_PER_FIELD])?;
         let x1 = FieldElement::from_bytes_be(&bytes[BYTES_PER_FIELD..BYTES_PER_FIELD * 2])?;
@@ -255,7 +259,7 @@ impl ByteConversion for [FieldElement<Babybear31PrimeField>; 4] {
     where
         Self: Sized,
     {
-        const BYTES_PER_FIELD: usize = 64;
+        const BYTES_PER_FIELD: usize = 32;
 
         let x0 = FieldElement::from_bytes_le(&bytes[0..BYTES_PER_FIELD])?;
         let x1 = FieldElement::from_bytes_le(&bytes[BYTES_PER_FIELD..BYTES_PER_FIELD * 2])?;
@@ -288,7 +292,7 @@ impl ByteConversion for FieldElement<Degree4BabyBearExtensionField> {
     where
         Self: Sized,
     {
-        const BYTES_PER_FIELD: usize = 8;
+        const BYTES_PER_FIELD: usize = 4;
         let x0 = FieldElement::from_bytes_be(&bytes[0..BYTES_PER_FIELD])?;
         let x1 = FieldElement::from_bytes_be(&bytes[BYTES_PER_FIELD..BYTES_PER_FIELD * 2])?;
         let x2 = FieldElement::from_bytes_be(&bytes[BYTES_PER_FIELD * 2..BYTES_PER_FIELD * 3])?;
@@ -301,7 +305,7 @@ impl ByteConversion for FieldElement<Degree4BabyBearExtensionField> {
     where
         Self: Sized,
     {
-        const BYTES_PER_FIELD: usize = 8;
+        const BYTES_PER_FIELD: usize = 4;
         let x0 = FieldElement::from_bytes_le(&bytes[0..BYTES_PER_FIELD])?;
         let x1 = FieldElement::from_bytes_le(&bytes[BYTES_PER_FIELD..BYTES_PER_FIELD * 2])?;
         let x2 = FieldElement::from_bytes_le(&bytes[BYTES_PER_FIELD * 2..BYTES_PER_FIELD * 3])?;
@@ -325,7 +329,10 @@ impl IsFFTField for Degree4BabyBearExtensionField {
         FieldElement::const_from_raw(0),
         FieldElement::const_from_raw(0),
         FieldElement::const_from_raw(0),
-        FieldElement::const_from_raw(124907976),
+        // We are using the montgomery form of 124907976.
+        // That is: 1344142388 = 124907976 * R mod p,
+        // where R = 2^32 and p = 2013265921.
+        FieldElement::const_from_raw(1344142388),
     ];
 }
 
@@ -346,6 +353,7 @@ mod tests {
             FpE::from(2) + FpE::from(6),
             FpE::from(3) - FpE::from(8),
         ]);
+        println!("BETA: {:?}", BETA);
         assert_eq!(a + b, expected_result);
     }
 
