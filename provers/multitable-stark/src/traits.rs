@@ -71,27 +71,209 @@ where
     }
 }
 
+pub trait Chip1AIR: AIR {
+    /// Chip1-specific transition constraints
+    fn chip1_transition_constraints(
+        &self,
+    ) -> Vec<Box<dyn TransitionConstraint<Self::Field, Self::FieldExtension>>>;
+}
+
+pub trait Chip2AIR: AIR {
+    /// Chip2-specific transition constraints
+    fn chip2_transition_constraints(
+        &self,
+    ) -> Vec<Box<dyn TransitionConstraint<Self::Field, Self::FieldExtension>>>;
+}
+
+pub struct CombinedAIR<C1, C2, F, E>
+where
+    C1: Chip1AIR<Field = F, FieldExtension = E>,
+    C2: Chip2AIR<Field = F, FieldExtension = E>,
+    F: IsFFTField + IsSubFieldOf<E> + Send + Sync,
+    E: IsField + Send + Sync,
+{
+    chip1: C1,
+    chip2: C2,
+    interaction_constraints: Vec<Box<dyn TransitionConstraint<F, E>>>,
+    //context: AirContext,
+    pub_inputs: CombinedPublicInputs<C1::PublicInputs, C2::PublicInputs>,
+    trace_length: usize,
+}
+
+impl<C1, C2, F, E> CombinedAIR<C1, C2, F, E>
+where
+    C1: Chip1AIR<Field = F, FieldExtension = E>,
+    C2: Chip2AIR<Field = F, FieldExtension = E>,
+    F: IsFFTField + IsSubFieldOf<E> + Send + Sync,
+    E: IsField + Send + Sync,
+{
+    pub fn new(
+        chip1: C1,
+        chip2: C2,
+        interaction_constraints: Vec<Box<dyn TransitionConstraint<F, E>>>,
+        trace_length: usize,
+        pub_inputs: &CombinedPublicInputs<C1::PublicInputs, C2::PublicInputs>,
+        proof_options: &ProofOptions,
+    ) -> Self {
+        let num_constraints = chip1.num_transition_constraints()
+            + chip2.num_transition_constraints()
+            + interaction_constraints.len();
+
+        let context = AirContext {
+            proof_options: proof_options.clone(),
+            num_transition_constraints: num_constraints,
+        };
+
+        Self {
+            chip1,
+            chip2,
+            interaction_constraints,
+            context,
+            pub_inputs: pub_inputs.clone(),
+            trace_length,
+        }
+    }
+}
+impl<C1, C2, F, E> AIR for CombinedAIR<C1, C2, F, E>
+where
+    C1: Chip1AIR<Field = F, FieldExtension = E>,
+    C2: Chip2AIR<Field = F, FieldExtension = E>,
+    F: IsFFTField + IsSubFieldOf<E> + Send + Sync,
+    E: IsField + Send + Sync,
+{
+    type Field = F;
+    type FieldExtension = E;
+    type PublicInputs = CombinedPublicInputs<C1::PublicInputs, C2::PublicInputs>;
+
+    const STEP_SIZE: usize = 1;
+
+    fn new(
+        trace_length: usize,
+        pub_inputs: &Self::PublicInputs,
+        proof_options: &ProofOptions,
+    ) -> Self {
+        unimplemented!("Use CombinedAIR::new instead")
+    }
+
+    fn trace_layout(&self) -> (usize, usize) {
+        let (main1, aux1) = self.chip1.trace_layout();
+        let (main2, aux2) = self.chip2.trace_layout();
+        (main1 + main2, aux1 + aux2)
+    }
+
+    fn transition_constraints(
+        &self,
+    ) -> &Vec<Box<dyn TransitionConstraint<Self::Field, Self::FieldExtension>>> {
+        &self.interaction_constraints
+    }
+
+    fn boundary_constraints(
+        &self,
+        rap_challenges: &[FieldElement<Self::FieldExtension>],
+    ) -> BoundaryConstraints<Self::FieldExtension> {
+        let mut boundary_constraints = self.chip1.boundary_constraints(rap_challenges);
+        boundary_constraints.extend(self.chip2.boundary_constraints(rap_challenges));
+        boundary_constraints
+    }
+
+    fn context(&self) -> &AirContext {
+        &self.context
+    }
+
+    fn trace_length(&self) -> usize {
+        self.trace_length
+    }
+
+    fn pub_inputs(&self) -> &Self::PublicInputs {
+        &self.pub_inputs
+    }
+}
+pub struct InteractionConstraint<F, E> {
+    chip1_column: usize,
+    chip2_column: usize,
+    _phantom: std::marker::PhantomData<(F, E)>,
+}
+
+impl<F, E> TransitionConstraint<F, E> for InteractionConstraint<F, E>
+where
+    F: IsFFTField + IsSubFieldOf<E> + Send + Sync,
+    E: IsField + Send + Sync,
+{
+    fn evaluate(
+        &self,
+        evaluation_context: &TransitionEvaluationContext<F, E>,
+        evaluations: &mut Vec<FieldElement<E>>,
+    ) {
+        match evaluation_context {
+            TransitionEvaluationContext::Prover {
+                frame,
+                periodic_values,
+                rap_challenges,
+            } => {
+                let chip1_value = frame.get_main_trace_column(self.chip1_column);
+                let chip2_value = frame.get_main_trace_column(self.chip2_column);
+                evaluations[0] = chip1_value[0] - chip2_value[0];
+            }
+            TransitionEvaluationContext::Verifier {
+                frame,
+                periodic_values,
+                rap_challenges,
+            } => {
+                // Similar logic for the verifier
+            }
+        }
+    }
+
+    // Implement other required methods (period, offset, etc.)
+}
+pub trait InteractionAIR {
+    type Field: IsFFTField + IsSubFieldOf<Self::FieldExtension> + Send + Sync;
+    type FieldExtension: IsField + Send + Sync;
+
+    /// Returns interaction-specific transition constraints
+    fn interaction_transition_constraints(
+        &self,
+    ) -> Vec<Box<dyn TransitionConstraint<Self::Field, Self::FieldExtension>>>;
+
+    /// Combines constraints from Chip1, Chip2, and interaction
+    fn combined_transition_constraints(
+        &self,
+    ) -> Vec<Box<dyn TransitionConstraint<Self::Field, Self::FieldExtension>>> {
+        let mut constraints = self.chip1_transition_constraints();
+        constraints.extend(self.chip2_transition_constraints());
+        constraints.extend(self.interaction_transition_constraints());
+        constraints
+    }
+
+    /// Returns Chip1's transition constraints
+    fn chip1_transition_constraints(
+        &self,
+    ) -> Vec<Box<dyn TransitionConstraint<Self::Field, Self::FieldExtension>>>;
+
+    /// Returns Chip2's transition constraints
+    fn chip2_transition_constraints(
+        &self,
+    ) -> Vec<Box<dyn TransitionConstraint<Self::Field, Self::FieldExtension>>>;
+}
+
 /// AIR is a representation of the Constraints
 pub trait AIR {
     type Field: IsFFTField + IsSubFieldOf<Self::FieldExtension> + Send + Sync;
     type FieldExtension: IsField + Send + Sync;
     type PublicInputs;
 
-    // How many rows are one row in Cairo.
-    // TODO: Remove this.
     const STEP_SIZE: usize;
 
     fn new(
-        trace_length: Vec<usize>,
-        pub_inputs: Vec<&Self::PublicInputs>,
-        // TODO: Same proof options for all the Tables?
+        trace_length: usize,
+        pub_inputs: &Self::PublicInputs,
         proof_options: &ProofOptions,
     ) -> Self;
 
     fn build_auxiliary_trace(
         &self,
-        _main_trace: Vec<&mut TraceTable<Self::Field, Self::FieldExtension>>,
-        _rap_challenges: Vec<&[FieldElement<Self::FieldExtension>]>,
+        _main_trace: &mut TraceTable<Self::Field, Self::FieldExtension>,
+        _rap_challenges: &[FieldElement<Self::FieldExtension>],
     ) where
         Self::FieldExtension: IsFFTField,
     {
@@ -105,30 +287,18 @@ pub trait AIR {
     }
 
     /// Returns the amount main trace columns and auxiliary trace columns
-    fn trace_layout(&self) -> Vec<(usize, usize)>;
-    // check if the option (Vec<usize>,Vec<usize>) is better
+    fn trace_layout(&self) -> (usize, usize);
 
-    fn has_trace_interaction(&self) -> Vec<bool> {
-        self.trace_layout()
-            .into_iter()
-            .map(|(_, aux_trace_columns)| aux_trace_columns != 0)
-            .collect()
+    fn has_trace_interaction(&self) -> bool {
+        let (_main_trace_columns, aux_trace_columns) = self.trace_layout();
+        aux_trace_columns != 0
     }
 
-    // // One table version of has_trace_interaction. You can find it in stark > traits.rs:
-    // fn has_trace_interaction(&self) -> bool {
-    //     let (_main_trace_columns, aux_trace_columns) = self.trace_layout();
-    //     aux_trace_columns != 0
-    // }
-
-    fn num_auxiliary_rap_columns(&self) -> Vec<usize> {
-        self.trace_layout()
-            .into_iter()
-            .map(|(_, aux_trace_columns)| aux_trace_columns)
-            .collect()
+    fn num_auxiliary_rap_columns(&self) -> usize {
+        self.trace_layout().1
     }
 
-    fn composition_poly_degree_bound(&self) -> Vec<usize>;
+    fn composition_poly_degree_bound(&self) -> usize;
 
     /// The method called by the prover to evaluate the transitions corresponding to an evaluation frame.
     /// In the case of the prover, the main evaluation table of the frame takes values in
@@ -136,14 +306,13 @@ pub trait AIR {
     /// In the case of the verifier, the frame take elements of Self::FieldExtension.
     fn compute_transition(
         &self,
-        evaluation_context: Vec<&TransitionEvaluationContext<Self::Field, Self::FieldExtension>>,
+        evaluation_context: &TransitionEvaluationContext<Self::Field, Self::FieldExtension>,
     ) -> Vec<FieldElement<Self::FieldExtension>> {
         let mut evaluations =
             vec![FieldElement::<Self::FieldExtension>::zero(); self.num_transition_constraints()];
         self.transition_constraints()
             .iter()
-            .zip(evaluation_context)
-            .for_each(|(c, ctx)| c.evaluate(ctx, &mut evaluations));
+            .for_each(|c| c.evaluate(evaluation_context, &mut evaluations));
 
         evaluations
     }
@@ -205,7 +374,7 @@ pub trait AIR {
 
     fn transition_constraints(
         &self,
-    ) -> &Vec<Vec<Box<dyn TransitionConstraint<Self::Field, Self::FieldExtension>>>>;
+    ) -> &Vec<Box<dyn TransitionConstraint<Self::Field, Self::FieldExtension>>>;
 
     fn transition_zerofier_evaluations(
         &self,

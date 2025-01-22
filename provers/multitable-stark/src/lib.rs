@@ -2,6 +2,7 @@ use lambdaworks_math::field::{
     element::FieldElement, fields::fft_friendly::stark_252_prime_field::Stark252PrimeField,
 };
 
+pub mod chip;
 pub mod constraints;
 pub mod context;
 pub mod debug;
@@ -13,14 +14,13 @@ pub mod grinding;
 pub mod proof;
 pub mod prover;
 pub mod table;
+#[cfg(test)]
+pub mod tests;
 pub mod trace;
 pub mod traits;
 pub mod transcript;
 pub mod utils;
 pub mod verifier;
-
-#[cfg(test)]
-pub mod tests;
 
 /// Configurations of the Prover available in compile time
 pub mod config;
