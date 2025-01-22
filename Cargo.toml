@@ -7,6 +7,7 @@ members = [
     "benches",
     "provers/plonk",
     "provers/stark",
+    "provers/multitable-stark",
     "provers/groth16",
     "provers/groth16/arkworks-adapter",
     "provers/groth16/circom-adapter",

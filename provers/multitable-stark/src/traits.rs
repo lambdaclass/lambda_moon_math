@@ -77,18 +77,21 @@ pub trait AIR {
     type FieldExtension: IsField + Send + Sync;
     type PublicInputs;
 
+    // How many rows are one row in Cairo.
+    // TODO: Remove this.
     const STEP_SIZE: usize;
 
     fn new(
-        trace_length: usize,
-        pub_inputs: &Self::PublicInputs,
+        trace_length: Vec<usize>,
+        pub_inputs: Vec<&Self::PublicInputs>,
+        // TODO: Same proof options for all the Tables?
         proof_options: &ProofOptions,
     ) -> Self;
 
     fn build_auxiliary_trace(
         &self,
-        _main_trace: &mut TraceTable<Self::Field, Self::FieldExtension>,
-        _rap_challenges: &[FieldElement<Self::FieldExtension>],
+        _main_trace: Vec<&mut TraceTable<Self::Field, Self::FieldExtension>>,
+        _rap_challenges: Vec<&[FieldElement<Self::FieldExtension>]>,
     ) where
         Self::FieldExtension: IsFFTField,
     {
@@ -102,18 +105,30 @@ pub trait AIR {
     }
 
     /// Returns the amount main trace columns and auxiliary trace columns
-    fn trace_layout(&self) -> (usize, usize);
+    fn trace_layout(&self) -> Vec<(usize, usize)>;
+    // check if the option (Vec<usize>,Vec<usize>) is better
 
-    fn has_trace_interaction(&self) -> bool {
-        let (_main_trace_columns, aux_trace_columns) = self.trace_layout();
-        aux_trace_columns != 0
+    fn has_trace_interaction(&self) -> Vec<bool> {
+        self.trace_layout()
+            .into_iter()
+            .map(|(_, aux_trace_columns)| aux_trace_columns != 0)
+            .collect()
     }
 
-    fn num_auxiliary_rap_columns(&self) -> usize {
-        self.trace_layout().1
+    // // One table version of has_trace_interaction. You can find it in stark > traits.rs:
+    // fn has_trace_interaction(&self) -> bool {
+    //     let (_main_trace_columns, aux_trace_columns) = self.trace_layout();
+    //     aux_trace_columns != 0
+    // }
+
+    fn num_auxiliary_rap_columns(&self) -> Vec<usize> {
+        self.trace_layout()
+            .into_iter()
+            .map(|(_, aux_trace_columns)| aux_trace_columns)
+            .collect()
     }
 
-    fn composition_poly_degree_bound(&self) -> usize;
+    fn composition_poly_degree_bound(&self) -> Vec<usize>;
 
     /// The method called by the prover to evaluate the transitions corresponding to an evaluation frame.
     /// In the case of the prover, the main evaluation table of the frame takes values in
@@ -121,13 +136,14 @@ pub trait AIR {
     /// In the case of the verifier, the frame take elements of Self::FieldExtension.
     fn compute_transition(
         &self,
-        evaluation_context: &TransitionEvaluationContext<Self::Field, Self::FieldExtension>,
+        evaluation_context: Vec<&TransitionEvaluationContext<Self::Field, Self::FieldExtension>>,
     ) -> Vec<FieldElement<Self::FieldExtension>> {
         let mut evaluations =
             vec![FieldElement::<Self::FieldExtension>::zero(); self.num_transition_constraints()];
         self.transition_constraints()
             .iter()
-            .for_each(|c| c.evaluate(evaluation_context, &mut evaluations));
+            .zip(evaluation_context)
+            .for_each(|(c, ctx)| c.evaluate(ctx, &mut evaluations));
 
         evaluations
     }
@@ -189,7 +205,7 @@ pub trait AIR {
 
     fn transition_constraints(
         &self,
-    ) -> &Vec<Box<dyn TransitionConstraint<Self::Field, Self::FieldExtension>>>;
+    ) -> &Vec<Vec<Box<dyn TransitionConstraint<Self::Field, Self::FieldExtension>>>>;
 
     fn transition_zerofier_evaluations(
         &self,
