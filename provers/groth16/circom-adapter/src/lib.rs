@@ -1,116 +1,116 @@
-#[cfg(test)]
-mod integration_tests;
+// allowing unused mut until we solve the signal ordering thing
+#![allow(unused_mut)]
 
-use lambdaworks_groth16::{common::FrElement, QuadraticArithmeticProgram as QAP};
-use lambdaworks_math::unsigned_integer::element::UnsignedInteger;
-use serde_json::Value;
+use lambdaworks_groth16::{common::FrElement, QuadraticArithmeticProgram};
 
+mod readers;
+pub use readers::*;
+
+/// Given a Circom R1CS and witness it returns a QAP, witness, and public signals; all compatible with Lambdaworks.
 pub fn circom_to_lambda(
-    r1cs_file_content: &str,
-    witness_file_content: &str,
-) -> (QAP, Vec<FrElement>) {
-    let circom_r1cs: Value = serde_json::from_str(r1cs_file_content).expect("Error parsing JSON");
-    let [mut l, mut r, mut o] = build_lro_from_circom_r1cs(&circom_r1cs);
+    circom_r1cs: CircomR1CS,
+    mut witness: CircomWitness,
+) -> (QuadraticArithmeticProgram, Vec<FrElement>, Vec<FrElement>) {
+    let num_of_outputs = circom_r1cs.num_outputs;
+    // let num_of_private_inputs = circom_r1cs.num_priv_inputs;
+    let num_of_pub_inputs = circom_r1cs.num_pub_inputs;
 
-    let mut witness: Vec<_> = serde_json::from_str::<Vec<String>>(witness_file_content)
-        .expect("Error parsing JSON")
-        .iter()
-        .map(|num_str| circom_str_to_lambda_field_element(num_str))
-        .collect();
-    adjust_lro_and_witness(&circom_r1cs, &mut l, &mut r, &mut o, &mut witness);
+    let [mut l, mut r, mut o] = build_lro_from_circom_r1cs(circom_r1cs);
+    // adjust_lro_and_witness(
+    //     num_of_outputs,
+    //     num_of_private_inputs,
+    //     num_of_pub_inputs,
+    //     &mut l,
+    //     &mut r,
+    //     &mut o,
+    //     &mut witness,
+    // );
 
-    // Lambdaworks considers "1" a public input, so compensate for it
-    let num_of_pub_inputs = circom_r1cs["nPubInputs"].as_u64().unwrap() as usize + 1;
+    // we could get a slice using the QAP but the QAP does not keep track of the number of private inputs;
+    // so instead we get the public signals here
+    let mut public_inputs = witness[..num_of_pub_inputs + num_of_outputs + 1].to_vec();
+    // public_inputs.insert(0, witness[0].clone()); // this is usually 1
 
     (
-        QAP::from_variable_matrices(num_of_pub_inputs, &l, &r, &o),
+        // Lambdaworks considers "1" a public input, so compensate for it
+        QuadraticArithmeticProgram::from_variable_matrices(public_inputs.len(), &l, &r, &o),
         witness,
+        public_inputs,
     )
 }
 
 /// Takes as input circom.r1cs.json file and outputs LRO matrices
 #[inline]
-fn build_lro_from_circom_r1cs(circom_r1cs: &Value) -> [Vec<Vec<FrElement>>; 3] {
-    let num_of_vars = circom_r1cs["nVars"].as_u64().unwrap() as usize; // Includes "1"
-    let num_of_gates = circom_r1cs["nConstraints"].as_u64().unwrap() as usize;
+fn build_lro_from_circom_r1cs(circom_r1cs: CircomR1CS) -> [Vec<Vec<FrElement>>; 3] {
+    let mut l = vec![vec![FrElement::zero(); circom_r1cs.num_constraints]; circom_r1cs.num_vars];
+    let mut r = l.clone(); // same as above
+    let mut o = l.clone(); // same as above
 
-    let mut l = vec![vec![FrElement::zero(); num_of_gates]; num_of_vars];
-    let mut r = vec![vec![FrElement::zero(); num_of_gates]; num_of_vars];
-    let mut o = vec![vec![FrElement::zero(); num_of_gates]; num_of_vars];
+    // assign each constraint from the R1CS hash-maps to LRO matrices
+    for (constraint_idx, constraint) in circom_r1cs.constraints.into_iter().enumerate() {
+        // destructuring here to avoid clones
+        let [lc, rc, oc] = constraint;
 
-    for (constraint_idx, constraint) in circom_r1cs["constraints"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .enumerate()
-    {
-        let constraint = constraint.as_array().unwrap();
-        for (var_idx, str_val) in constraint[0].as_object().unwrap() {
-            l[var_idx.parse::<usize>().unwrap()][constraint_idx] =
-                circom_str_to_lambda_field_element(str_val.as_str().unwrap());
+        for (var_idx, val) in lc {
+            l[var_idx][constraint_idx] = val;
         }
-        for (var_idx, str_val) in constraint[1].as_object().unwrap() {
-            r[var_idx.parse::<usize>().unwrap()][constraint_idx] =
-                circom_str_to_lambda_field_element(str_val.as_str().unwrap());
+        for (var_idx, val) in rc {
+            r[var_idx][constraint_idx] = val;
         }
-        for (var_idx, str_val) in constraint[2].as_object().unwrap() {
-            o[var_idx.parse::<usize>().unwrap()][constraint_idx] =
-                circom_str_to_lambda_field_element(str_val.as_str().unwrap());
+        for (var_idx, val) in oc {
+            o[var_idx][constraint_idx] = val;
         }
     }
 
     [l, r, o]
 }
 
-/// Circom witness ordering: ["1", ..outputs, ...inputs, ...other_signals]
-/// Lambda witness ordering: ["1", ...inputs, ..outputs,  ...other_signals]
-/// Same applies to rows of LRO (each representing a variable)
-/// This function compensates this difference
+/// Change the ordering of private-inputs and public-outputs from Circom to Lambdaworks style,
+/// for both LRO matrices and witness.
 #[inline]
+#[deprecated = "seems to be working without this?"]
+#[allow(unused)]
 fn adjust_lro_and_witness(
-    circom_r1cs: &Value,
+    num_of_outputs: usize,
+    num_of_private_inputs: usize,
+    num_of_pub_inputs: usize,
     l: &mut [Vec<FrElement>],
     r: &mut [Vec<FrElement>],
     o: &mut [Vec<FrElement>],
     witness: &mut [FrElement],
 ) {
-    let num_of_private_inputs = circom_r1cs["nPrvInputs"].as_u64().unwrap() as usize;
-    let num_of_pub_inputs = circom_r1cs["nPubInputs"].as_u64().unwrap() as usize;
     let num_of_inputs = num_of_pub_inputs + num_of_private_inputs;
-    let num_of_outputs = circom_r1cs["nOutputs"].as_u64().unwrap() as usize;
 
     let mut temp_l = Vec::with_capacity(num_of_inputs);
     let mut temp_r = Vec::with_capacity(num_of_inputs);
     let mut temp_o = Vec::with_capacity(num_of_inputs);
     let mut temp_witness = Vec::with_capacity(num_of_inputs);
 
-    for i in 0..num_of_inputs {
-        temp_l.push(l[num_of_outputs + 1 + i].clone());
-        temp_r.push(r[num_of_outputs + 1 + i].clone());
-        temp_o.push(o[num_of_outputs + 1 + i].clone());
-        temp_witness.push(witness[num_of_outputs + 1 + i].clone());
-    }
+    temp_l.extend_from_slice(&l[num_of_outputs + 1..num_of_outputs + 1 + num_of_inputs]);
+    temp_r.extend_from_slice(&r[num_of_outputs + 1..num_of_outputs + 1 + num_of_inputs]);
+    temp_o.extend_from_slice(&o[num_of_outputs + 1..num_of_outputs + 1 + num_of_inputs]);
+    temp_witness
+        .extend_from_slice(&witness[num_of_outputs + 1..num_of_outputs + 1 + num_of_inputs]);
 
-    for i in 0..num_of_inputs {
-        let temp_l_i = l[1 + i].clone();
-        l[1 + i].clone_from(&temp_l[i]);
-        l[num_of_outputs + 1 + i].clone_from(&temp_l_i);
+    let temp_l_i = &l[1..=num_of_inputs].to_vec();
+    l[1..=num_of_inputs].clone_from_slice(&temp_l[..num_of_inputs]);
+    l[num_of_outputs + 1..num_of_inputs + num_of_outputs + 1].clone_from_slice(&temp_l_i);
 
-        let temp_r_i = r[1 + i].clone();
-        r[1 + i].clone_from(&temp_r[i]);
-        r[num_of_outputs + 1 + i].clone_from(&temp_r_i);
+    let temp_r_i = &r[1..=num_of_inputs].to_vec();
+    r[1..=num_of_inputs].clone_from_slice(&temp_r[..num_of_inputs]);
+    r[num_of_outputs + 1..num_of_inputs + num_of_outputs + 1].clone_from_slice(&temp_r_i);
 
-        let temp_o_i = o[1 + i].clone();
-        o[1 + i].clone_from(&temp_o[i]);
-        o[num_of_outputs + 1 + i].clone_from(&temp_o_i);
+    let temp_o_i = &o[1..=num_of_inputs].to_vec();
+    o[1..=num_of_inputs].clone_from_slice(&temp_o[..num_of_inputs]);
+    o[num_of_outputs + 1..num_of_inputs + num_of_outputs + 1].clone_from_slice(&temp_o_i);
 
-        let temp_witness_i = witness[1 + i].clone();
-        witness[1 + i].clone_from(&temp_witness[i]);
-        witness[num_of_outputs + 1 + i].clone_from(&temp_witness_i);
-    }
+    let temp_witness_i = &witness[1..=num_of_inputs].to_vec();
+    witness[1..=num_of_inputs].clone_from_slice(&temp_witness[..num_of_inputs]);
+    witness[num_of_outputs + 1..num_of_inputs + num_of_outputs + 1]
+        .clone_from_slice(&temp_witness_i);
 }
 
-#[inline]
-fn circom_str_to_lambda_field_element(value: &str) -> FrElement {
-    FrElement::from(&UnsignedInteger::<4>::from_dec_str(value).unwrap())
-}
+// #[inline]
+// fn circom_str_to_lambda_field_element(value: &str) -> FrElement {
+//     FrElement::from(&UnsignedInteger::<4>::from_dec_str(value).unwrap())
+// }
