@@ -103,14 +103,9 @@ impl<E: IsShortWeierstrass> ShortWeierstrassProjectivePoint<E> {
 
         if u == *py {
             if v != *px || *py == FieldElement::zero() {
-                return Self::new([
-                    FieldElement::zero(),
-                    FieldElement::one(),
-                    FieldElement::zero(),
-                ]);
-            } else {
-                return self.double();
+                return Self::neutral_element();
             }
+            return self.double();
         }
 
         let u = &u - py;
@@ -162,8 +157,7 @@ impl<E: IsShortWeierstrass> IsGroup for ShortWeierstrassProjectivePoint<E> {
     }
 
     fn is_neutral_element(&self) -> bool {
-        let pz = self.z();
-        pz == &FieldElement::zero()
+        self.z() == &FieldElement::zero()
     }
 
     /// Computes the addition of `self` and `other`.
@@ -290,19 +284,18 @@ where
                 }
 
                 let len = bytes.len() / 3;
-                let x: FieldElement<E::BaseField>;
-                let y: FieldElement<E::BaseField>;
-                let z: FieldElement<E::BaseField>;
-
-                if endianness == Endianness::BigEndian {
-                    x = ByteConversion::from_bytes_be(&bytes[..len])?;
-                    y = ByteConversion::from_bytes_be(&bytes[len..len * 2])?;
-                    z = ByteConversion::from_bytes_be(&bytes[len * 2..])?;
-                } else {
-                    x = ByteConversion::from_bytes_le(&bytes[..len])?;
-                    y = ByteConversion::from_bytes_le(&bytes[len..len * 2])?;
-                    z = ByteConversion::from_bytes_le(&bytes[len * 2..])?;
-                }
+                let (x, y, z) = match endianness {
+                    Endianness::BigEndian => (
+                        ByteConversion::from_bytes_be(&bytes[..len])?,
+                        ByteConversion::from_bytes_be(&bytes[len..len * 2])?,
+                        ByteConversion::from_bytes_be(&bytes[len * 2..])?,
+                    ),
+                    _ => (
+                        ByteConversion::from_bytes_le(&bytes[..len])?,
+                        ByteConversion::from_bytes_le(&bytes[len..len * 2])?,
+                        ByteConversion::from_bytes_le(&bytes[len * 2..])?,
+                    ),
+                };
 
                 if z == FieldElement::zero() {
                     let point = Self::new([x, y, z]);
@@ -323,16 +316,17 @@ where
                 }
 
                 let len = bytes.len() / 2;
-                let x: FieldElement<E::BaseField>;
-                let y: FieldElement<E::BaseField>;
 
-                if endianness == Endianness::BigEndian {
-                    x = ByteConversion::from_bytes_be(&bytes[..len])?;
-                    y = ByteConversion::from_bytes_be(&bytes[len..])?;
-                } else {
-                    x = ByteConversion::from_bytes_le(&bytes[..len])?;
-                    y = ByteConversion::from_bytes_le(&bytes[len..])?;
-                }
+                let (x, y) = match endianness {
+                    Endianness::BigEndian => (
+                        ByteConversion::from_bytes_be(&bytes[..len])?,
+                        ByteConversion::from_bytes_be(&bytes[len..])?,
+                    ),
+                    _ => (
+                        ByteConversion::from_bytes_le(&bytes[..len])?,
+                        ByteConversion::from_bytes_le(&bytes[len..])?,
+                    ),
+                };
 
                 if E::defining_equation(&x, &y) == FieldElement::zero() {
                     Ok(Self::new([x, y, FieldElement::one()]))

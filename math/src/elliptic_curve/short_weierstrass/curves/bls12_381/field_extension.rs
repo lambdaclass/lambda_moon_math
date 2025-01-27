@@ -109,35 +109,40 @@ impl IsSubFieldOf<Degree2ExtensionField> for BLS12381PrimeField {
         a: &Self::BaseType,
         b: &<Degree2ExtensionField as IsField>::BaseType,
     ) -> <Degree2ExtensionField as IsField>::BaseType {
-        let c0 = FieldElement::from_raw(<Self as IsField>::mul(a, b[0].value()));
-        let c1 = FieldElement::from_raw(<Self as IsField>::mul(a, b[1].value()));
-        [c0, c1]
+        [
+            FieldElement::from_raw(<Self as IsField>::mul(a, b[0].value())),
+            FieldElement::from_raw(<Self as IsField>::mul(a, b[1].value())),
+        ]
     }
 
     fn add(
         a: &Self::BaseType,
         b: &<Degree2ExtensionField as IsField>::BaseType,
     ) -> <Degree2ExtensionField as IsField>::BaseType {
-        let c0 = FieldElement::from_raw(<Self as IsField>::add(a, b[0].value()));
-        let c1 = FieldElement::from_raw(*b[1].value());
-        [c0, c1]
+        [
+            FieldElement::from_raw(<Self as IsField>::add(a, b[0].value())),
+            FieldElement::from_raw(*b[1].value()),
+        ]
     }
 
     fn div(
         a: &Self::BaseType,
         b: &<Degree2ExtensionField as IsField>::BaseType,
     ) -> <Degree2ExtensionField as IsField>::BaseType {
-        let b_inv = Degree2ExtensionField::inv(b).unwrap();
-        <Self as IsSubFieldOf<Degree2ExtensionField>>::mul(a, &b_inv)
+        <Self as IsSubFieldOf<Degree2ExtensionField>>::mul(
+            a,
+            &Degree2ExtensionField::inv(b).unwrap(),
+        )
     }
 
     fn sub(
         a: &Self::BaseType,
         b: &<Degree2ExtensionField as IsField>::BaseType,
     ) -> <Degree2ExtensionField as IsField>::BaseType {
-        let c0 = FieldElement::from_raw(<Self as IsField>::sub(a, b[0].value()));
-        let c1 = FieldElement::from_raw(<Self as IsField>::neg(b[1].value()));
-        [c0, c1]
+        [
+            FieldElement::from_raw(<Self as IsField>::sub(a, b[0].value())),
+            FieldElement::from_raw(<Self as IsField>::neg(b[1].value())),
+        ]
     }
 
     fn embed(a: Self::BaseType) -> <Degree2ExtensionField as IsField>::BaseType {
@@ -172,9 +177,10 @@ impl ByteConversion for FieldElement<Degree2ExtensionField> {
         Self: core::marker::Sized,
     {
         const BYTES_PER_FIELD: usize = 48;
-        let x0 = FieldElement::from_bytes_be(&bytes[0..BYTES_PER_FIELD])?;
-        let x1 = FieldElement::from_bytes_be(&bytes[BYTES_PER_FIELD..BYTES_PER_FIELD * 2])?;
-        Ok(Self::new([x0, x1]))
+        Ok(Self::new([
+            FieldElement::from_bytes_be(&bytes[0..BYTES_PER_FIELD])?,
+            FieldElement::from_bytes_be(&bytes[BYTES_PER_FIELD..BYTES_PER_FIELD * 2])?,
+        ]))
     }
 
     fn from_bytes_le(bytes: &[u8]) -> Result<Self, crate::errors::ByteConversionError>
@@ -182,9 +188,10 @@ impl ByteConversion for FieldElement<Degree2ExtensionField> {
         Self: core::marker::Sized,
     {
         const BYTES_PER_FIELD: usize = 48;
-        let x0 = FieldElement::from_bytes_le(&bytes[0..BYTES_PER_FIELD])?;
-        let x1 = FieldElement::from_bytes_le(&bytes[BYTES_PER_FIELD..BYTES_PER_FIELD * 2])?;
-        Ok(Self::new([x0, x1]))
+        Ok(Self::new([
+            FieldElement::from_bytes_le(&bytes[0..BYTES_PER_FIELD])?,
+            FieldElement::from_bytes_le(&bytes[BYTES_PER_FIELD..BYTES_PER_FIELD * 2])?,
+        ]))
     }
 }
 
