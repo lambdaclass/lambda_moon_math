@@ -11,8 +11,8 @@ path = "src/main.rs"
 
 [dependencies]
 lambdaworks-crypto = { workspace = true }
-lambdaworks-groth16 = { workspace = true }
+lambdaworks-groth16-bls12-381 = { workspace = true }
 lambdaworks-math = { workspace = true, features = ["lambdaworks-serde-string"] }
-lambdaworks-circom-adapter = { workspace = true }
+lambdaworks-circom-adapter-bls12-381 = { workspace = true }
 serde = { version = "1.0" }
 serde_json = "1"

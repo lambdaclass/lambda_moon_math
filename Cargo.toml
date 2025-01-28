@@ -1,6 +1,25 @@
 [workspace]
 
-members = ["math", "crypto", "gpu", "benches", "provers/plonk", "provers/stark", "provers/groth16", "provers/groth16/arkworks-adapter", "provers/groth16/circom-adapter", "examples/merkle-tree-cli", "examples/prove-miden", "provers/winterfell_adapter", "examples/shamir_secret_sharing","examples/pinocchio", "examples/prove-verify-circom", "examples/baby-snark"]
+members = [
+    "math",
+    "crypto",
+    "gpu",
+    "benches",
+    "provers/plonk",
+    "provers/stark",
+    "provers/groth16/bn_254",
+    "provers/groth16/bn_254/circom-adapter",
+    "provers/groth16/bls12_381",
+    "provers/groth16/bls12_381/arkworks-adapter",
+    "provers/groth16/bls12_381/circom-adapter",
+    "examples/merkle-tree-cli",
+    "examples/prove-miden",
+    "provers/winterfell_adapter",
+    "examples/shamir_secret_sharing",
+    "examples/pinocchio",
+    "examples/prove-verify-circom",
+    "examples/baby-snark",
+]
 exclude = ["ensure-no_std"]
 resolver = "2"
 
@@ -16,16 +35,18 @@ lambdaworks-crypto = { path = "./crypto", version = "0.11.0", default-features =
 lambdaworks-gpu = { path = "./gpu", version = "0.11.0" }
 lambdaworks-math = { path = "./math", version = "0.11.0", default-features = false }
 stark-platinum-prover = { path = "./provers/stark" }
-lambdaworks-winterfell-adapter = { path = "./provers/winterfell_adapter"}
-lambdaworks-groth16 = { path = "./provers/groth16" }
-lambdaworks-circom-adapter = { path = "./provers/groth16/circom-adapter" }
+lambdaworks-winterfell-adapter = { path = "./provers/winterfell_adapter" }
+lambdaworks-groth16-bn-254 = { path = "./provers/groth16/bn_254" }
+lambdaworks-groth16-bls12-381 = { path = "./provers/groth16/bls12_381" }
+lambdaworks-circom-adapter-bn-254 = { path = "./provers/groth16/bn_254/circom-adapter" }
+lambdaworks-circom-adapter-bls12-381 = { path = "./provers/groth16/bls12_381/circom-adapter" }
 
 [patch.crates-io]
-winter-air = { git = "https://github.com/lambdaclass/winterfell-for-lambdaworks.git", branch = "derive-clone-v6.4"}
-winter-prover = { git = "https://github.com/lambdaclass/winterfell-for-lambdaworks.git", branch = "derive-clone-v6.4"}
-winter-math = { git = "https://github.com/lambdaclass/winterfell-for-lambdaworks.git", branch = "derive-clone-v6.4"}
-winter-utils = { git = "https://github.com/lambdaclass/winterfell-for-lambdaworks.git", branch = "derive-clone-v6.4"}
-winter-crypto = { git = "https://github.com/lambdaclass/winterfell-for-lambdaworks.git", branch = "derive-clone-v6.4"}
+winter-air = { git = "https://github.com/lambdaclass/winterfell-for-lambdaworks.git", branch = "derive-clone-v6.4" }
+winter-prover = { git = "https://github.com/lambdaclass/winterfell-for-lambdaworks.git", branch = "derive-clone-v6.4" }
+winter-math = { git = "https://github.com/lambdaclass/winterfell-for-lambdaworks.git", branch = "derive-clone-v6.4" }
+winter-utils = { git = "https://github.com/lambdaclass/winterfell-for-lambdaworks.git", branch = "derive-clone-v6.4" }
+winter-crypto = { git = "https://github.com/lambdaclass/winterfell-for-lambdaworks.git", branch = "derive-clone-v6.4" }
 miden-air = { git = "https://github.com/lambdaclass/miden-vm" }
 miden-core = { git = "https://github.com/lambdaclass/miden-vm" }
 miden-assembly = { git = "https://github.com/lambdaclass/miden-vm" }

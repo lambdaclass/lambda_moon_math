@@ -1,0 +1,16 @@
+[package]
+name = "lambdaworks-groth16-bls12-381"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+lambdaworks-math.workspace = true
+lambdaworks-crypto.workspace = true
+rand_chacha = "0.3.1"
+serde = "1.0"
+serde_json = "1.0"
+rand = "0.8.5"

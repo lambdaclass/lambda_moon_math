@@ -1,7 +1,7 @@
 use std::fs;
 
-use lambdaworks_circom_adapter::*;
-use lambdaworks_groth16::*;
+use lambdaworks_circom_adapter_bls12_381::*;
+use lambdaworks_groth16_bls12_381::*;
 
 const TEST_DIR: &str = "input_files/";
 
