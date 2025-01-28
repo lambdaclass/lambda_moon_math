@@ -41,6 +41,7 @@ proptest = "1.1.0"
 pprof = { version = "0.13.0", features = ["criterion", "flamegraph"] }
 p3-baby-bear = { git = "https://github.com/Plonky3/Plonky3" }
 p3-field = { git = "https://github.com/Plonky3/Plonky3" }
+
 [features]
 default = ["parallel", "std"]
 std = ["alloc", "serde?/std", "serde_json?/std"]
