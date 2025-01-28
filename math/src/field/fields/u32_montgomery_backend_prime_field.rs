@@ -30,6 +30,9 @@ impl<const MODULUS: u32> U32MontgomeryBackendPrimeField<MODULUS> {
     pub const ZERO: u32 = 0;
     pub const ONE: u32 = MontgomeryAlgorithms::mul(&1, &Self::R2, &MODULUS, &Self::MU);
 
+    // Compute `modulus^{-1} mod 2^{32}`.
+    // Algorithm adapted from `compute_mu_parameter()` from `montgomery_backed_prime_fields.rs` in Lambdaworks.
+    // E.g, in Baby Bear field MU = 2281701377.
     const fn compute_mu_parameter() -> Result<u32, &'static str> {
         let mut y = 1;
         let word_size = 32;
@@ -48,6 +51,9 @@ impl<const MODULUS: u32> U32MontgomeryBackendPrimeField<MODULUS> {
         Ok(y)
     }
 
+    // Compute `2^{2 * 32} mod modulus`.
+    // Algorithm adapted from `compute_r2_parameter()` from `montgomery_backed_prime_fields.rs` in Lambdaworks.
+    // E.g, in Baby Bear field R2 = 1172168163.
     const fn compute_r2_parameter() -> Result<u32, &'static str> {
         let word_size = 32;
         let mut l: usize = 0;
